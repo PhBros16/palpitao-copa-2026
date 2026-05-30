@@ -470,7 +470,7 @@ export default function Home() {
                         return <tr key={p}>
                           <td>{posIcon(i)} {p}</td>
                           <td className="r" style={{color:'var(--gold)'}}>
-                            {(roundPts as number)>0?roundPts:hasPal?<span style={{color:'var(--text-muted)'}}>—</span>:<span style={{color:'rgba(192,57,43,.7)',fontSize:11}}>NP</span>}
+                            {(roundPts as number)>0?(roundPts as number):hasPal?<span style={{color:'var(--text-muted)'}}>—</span>:<span style={{color:'rgba(192,57,43,.7)',fontSize:11}}>NP</span>}
                           </td>
                           <td className="r" style={{color:'var(--text-muted)'}}>{total}</td>
                         </tr>
@@ -597,7 +597,7 @@ export default function Home() {
                           {pts!==null&&<><br/><span className={`pts-badge pts-${pts}`}>{pts}</span></>}
                         </td>
                       })}
-                      <td className="r" style={{color:'var(--gold)',fontFamily:"'Bebas Neue'",fontSize:17}}>{(roundPts as number)>0?roundPts:'—'}</td>
+                      <td className="r" style={{color:'var(--gold)',fontFamily:"'Bebas Neue'",fontSize:17}}>{(roundPts as number)>0?(roundPts as number):'—'}</td>
                       <td className="r" style={{fontSize:11,color:'var(--text-muted)'}}>{time}</td>
                     </tr>
                   })}

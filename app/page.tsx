@@ -212,7 +212,7 @@ export default function Home() {
   async function finalizeRound() {
     if(!state||!confirm('Finalizar a rodada? Pontuações serão registradas.')) return
     const newState=JSON.parse(JSON.stringify(state)); const scores:any={}
-    PLAYERS.forEach(p=>{ scores[p]=Object.values(newState.correctedScores[p]||{}).reduce((a:any,b:any)=>a+b,0); newState.totalPoints[p]=(newState.totalPoints[p]||0)+scores[p] })
+    PLAYERS.forEach(p=>{ scores[p]=Object.values(newState.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number; newState.totalPoints[p]=(newState.totalPoints[p]||0)+scores[p] })
     newState.roundHistory.push({roundName:newState.round.name,scores})
     newState.palpites={}; newState.palpiteTimes={}; newState.correctedScores={}; newState.results={}
     newState.roundFinalized=true; newState.round.name=''; newState.round.matches=[]
@@ -464,7 +464,7 @@ export default function Home() {
                     <thead><tr><th>Participante</th><th className="r">Pts Rodada</th><th className="r">Total</th></tr></thead>
                     <tbody>
                       {PLAYERS.map((p,i)=>{
-                        const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:any,b:any)=>a+b,0)
+                        const roundPts = Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
                         const total=state.totalPoints[p]||0
                         const hasPal=state.palpites[p]&&Object.keys(state.palpites[p]).length>0
                         return <tr key={p}>
@@ -585,7 +585,7 @@ export default function Home() {
                   {PLAYERS.map(p=>{
                     const pal=state.palpites[p]||{}
                     const time=state.palpiteTimes[p]?new Date(state.palpiteTimes[p]).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'
-                    const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:any,b:any)=>a+b,0)
+                    const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
                     return <tr key={p}>
                       <td>{p}</td>
                       {state.round.matches.map((m:any)=>{
@@ -699,7 +699,7 @@ export default function Home() {
                 </div>
               </div>
               {PLAYERS.map(p=>{
-                const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:any,b:any)=>a+b,0)
+                const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
                 const pkey=p.replace(/\s/g,'_')
                 return <div key={p} className="corr-p">
                   <div className="corr-h" onClick={()=>setCorrOpen((o:any)=>({...o,[pkey]:!o[pkey]}))}>

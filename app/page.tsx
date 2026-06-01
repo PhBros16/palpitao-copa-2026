@@ -4,10 +4,14 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 const PLAYERS = ['Ramon','Matheus Couto','Pedro Frozza','Pedro Gaúcho','Victor Bahia','Victor Simões','PH','André','Matheus Brito','Costa','Diniz','Samuel','Giovanni','Damus']
 const MASTER_PASS = 'Mestre#26Pal'
 
+const PHASE_MULTIPLIERS: any = {
+  grupos:1, dezesseis:2, oitavas:3, quartas:4, semi:5, terceiro:6, final:6
+}
+
 function defaultMatches() {
   return [
-    { id:'m1', home:'Brasil', away:'Argentina', homeFlag:'🇧🇷', awayFlag:'🇦🇷', time:'16:00', isElim:false },
-    { id:'m2', home:'França', away:'Alemanha', homeFlag:'🇫🇷', awayFlag:'🇩🇪', time:'19:00', isElim:false },
+    { id:'m1', home:'Brasil', away:'Argentina', homeFlag:'🇧🇷', awayFlag:'🇦🇷', date:'', time:'16:00', locked:false, hasQuemAvanca:false, hasPenaltis:false },
+    { id:'m2', home:'França', away:'Alemanha', homeFlag:'🇫🇷', awayFlag:'🇩🇪', date:'', time:'19:00', locked:false, hasQuemAvanca:false, hasPenaltis:false },
   ]
 }
 
@@ -19,8 +23,11 @@ function defaultScoringPhases() {
       {desc:'Acertar o saldo de gols', pts:3},
       {desc:'Acertar o placar exato', pts:5},
     ],
-    hasClassify:false,
   }]
+}
+
+function defaultMultipliers() {
+  return { quemAvanca:2, penaltisBonus:1 }
 }
 
 function defaultState(): any {
@@ -31,23 +38,70 @@ function defaultState(): any {
     palpites:{}, palpiteTimes:{}, results:{},
     correctedScores:{}, totalPoints:{},
     roundHistory:[],
-    shame:{ player:'', photoUrl:'', text:'' },
+    shame:{ player:'', photoUrl:'' },
     roundFinalized:false,
     scoringPhases:defaultScoringPhases(),
+    multipliers:defaultMultipliers(),
   }
 }
 
-function calcPoints(pal: any, res: any, phase: any) {
+function parseMatchDateTime(m: any): Date | null {
+  if(!m.time) return null
+  const [h, min] = m.time.split(':').map(Number)
+  if(isNaN(h)||isNaN(min)) return null
+  const dt = new Date()
+  if(m.date) {
+    const [dd, MM] = m.date.split('/').map(Number)
+    if(!isNaN(dd)&&!isNaN(MM)) {
+      dt.setMonth(MM-1)
+      dt.setDate(dd)
+    }
+  }
+  dt.setHours(h, min, 0, 0)
+  return dt
+}
+
+function isMatchLocked(m: any, matchIndex: number = 1): boolean {
+  if(m.locked) return true
+  const matchTime = parseMatchDateTime(m)
+  if(!matchTime) return false
+  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
+  return (matchTime.getTime() - Date.now()) <= buffer
+}
+
+function getCountdown(m: any, matchIndex: number): string | null {
+  const matchTime = parseMatchDateTime(m)
+  if(!matchTime) return null
+  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
+  const diff = matchTime.getTime() - buffer - Date.now()
+  if(diff <= 0) return null
+  const hours = Math.floor(diff / 3600000)
+  const mins = Math.floor((diff % 3600000) / 60000)
+  if(hours > 0) return `${hours}h ${mins}min`
+  return `${mins}min`
+}
+
+function calcPoints(pal: any, res: any, phase: any, mult: number, m: any, extraRes: any, scoreMult: any) {
   if(!pal||!res||res.h===''||res.a==='') return null
   const ph=parseInt(pal.h), pa=parseInt(pal.a)
   const rh=parseInt(res.h), ra=parseInt(res.a)
   if(isNaN(ph)||isNaN(pa)||isNaN(rh)||isNaN(ra)) return null
   const rules = phase?.rules || defaultScoringPhases()[0].rules
-  if(ph===rh&&pa===ra) return rules[2]?.pts??5
-  if((ph-pa)===(rh-ra)) return rules[1]?.pts??3
-  const pw=ph>pa?1:ph<pa?-1:0, rw=rh>ra?1:rh<ra?-1:0
-  if(pw===rw) return rules[0]?.pts??1
-  return 0
+  let base = 0
+  if(ph===rh&&pa===ra) base = rules[2]?.pts??5
+  else if((ph-pa)===(rh-ra)) base = rules[1]?.pts??3
+  else {
+    const pw=ph>pa?1:ph<pa?-1:0, rw=rh>ra?1:rh<ra?-1:0
+    if(pw===rw) base = rules[0]?.pts??1
+  }
+  let total = base * mult
+  if(m?.hasQuemAvanca && extraRes?.quemAvanca && pal?.quemAvanca) {
+    if(pal.quemAvanca === extraRes.quemAvanca) total += (scoreMult?.quemAvanca??2) * mult
+  }
+  if(m?.hasPenaltis && extraRes?.foiPenaltis === true && ph===pa) {
+    total += (scoreMult?.penaltisBonus??1)
+  }
+  return total
 }
 
 function posIcon(i: number) {
@@ -62,7 +116,10 @@ export default function Home() {
   const [currentUser, setCurrentUser] = useState<string|null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [activeTab, setActiveTab] = useState('home')
+  const [darkMode, setDarkMode] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showResetModal, setShowResetModal] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState('')
   const [adminPassInput, setAdminPassInput] = useState('')
   const [modalError, setModalError] = useState('')
   const [notif, setNotif] = useState<{msg:string,type:string}|null>(null)
@@ -70,20 +127,24 @@ export default function Home() {
   const [localPalpites, setLocalPalpites] = useState<any>({})
   const [adminBuf, setAdminBuf] = useState<any>({})
   const [resultInputs, setResultInputs] = useState<any>({})
+  const [extraResults, setExtraResults] = useState<any>({})
   const [corrOpen, setCorrOpen] = useState<any>({})
   const [manualPts, setManualPts] = useState<any>({})
   const [scoringPhases, setScoringPhases] = useState<any[]>([])
+  const [multipliersBuf, setMultipliersBuf] = useState<any>({})
   const [shamePlayer, setShamePlayer] = useState('')
   const [shameUrl, setShameUrl] = useState('')
-  const [shameText, setShameText] = useState('')
   const [newPass, setNewPass] = useState('')
   const [masterConf, setMasterConf] = useState('')
   const notifTimer = useRef<any>(null)
 
+  const [, setTick] = useState(0)
+  useEffect(()=>{ const t=setInterval(()=>setTick(n=>n+1),60000); return()=>clearInterval(t) },[])
+
   const showNotif = useCallback((msg: string, type='success') => {
     if(notifTimer.current) clearTimeout(notifTimer.current)
     setNotif({msg,type})
-    notifTimer.current = setTimeout(()=>setNotif(null),3000)
+    notifTimer.current = setTimeout(()=>setNotif(null),3500)
   },[])
 
   const fetchState = useCallback(async () => {
@@ -92,9 +153,8 @@ export default function Home() {
       const json = await res.json()
       const s = json.state || defaultState()
       if(!s.adminPass) s.adminPass='Copa2026!'
-      if(!s.shame) s.shame={player:'',photoUrl:'',text:''}
-      if(!s.shame.text) s.shame.text=''
-      if(s.palpitesOpen===undefined||s.palpitesOpen===null) s.palpitesOpen=true
+      if(!s.shame) s.shame={player:'',photoUrl:''}
+      if(s.palpitesOpen===undefined) s.palpitesOpen=true
       if(!s.roundFinalized) s.roundFinalized=false
       if(!s.scoringPhases) s.scoringPhases=defaultScoringPhases()
       if(!s.roundHistory) s.roundHistory=[]
@@ -102,6 +162,14 @@ export default function Home() {
       if(!s.totalPoints) s.totalPoints={}
       if(!s.palpites) s.palpites={}
       if(!s.results) s.results={}
+      if(!s.multipliers) s.multipliers=defaultMultipliers()
+      if(s.round?.matches) {
+        s.round.matches = s.round.matches.map((m:any)=>({
+          date:'', locked:false, hasQuemAvanca:false, hasPenaltis:false, ...m
+        }))
+      } else {
+        s.round = s.round || { name:'', phase:'grupos', matches:[] }
+      }
       setState(s)
     } catch { setState(defaultState()) }
     finally { setLoading(false) }
@@ -128,7 +196,7 @@ export default function Home() {
     if(state) {
       const myPal = state.palpites[name]||{}
       const local: any={}
-      state.round.matches.forEach((m:any)=>{ local[m.id]=myPal[m.id]||{h:'',a:'',classify:''} })
+      state.round.matches.forEach((m:any)=>{ local[m.id]=myPal[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''} })
       setLocalPalpites(local)
     }
   }
@@ -140,25 +208,49 @@ export default function Home() {
       setShowModal(false); setAdminPassInput(''); setModalError(''); setActiveTab('home')
       setAdminBuf({ name:state.round.name, phase:state.round.phase, open:state.palpitesOpen, matches:JSON.parse(JSON.stringify(state.round.matches)) })
       setScoringPhases(JSON.parse(JSON.stringify(state.scoringPhases)))
-      setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl); setShameText(state.shame.text||'')
-      const ri: any={}
-      state.round.matches.forEach((m:any)=>{ ri[m.id]=state.results[m.id]||{h:'',a:''} })
-      setResultInputs(ri)
+      setMultipliersBuf(JSON.parse(JSON.stringify(state.multipliers||defaultMultipliers())))
+      setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl)
+      const ri:any={}; const er:any={}
+      state.round.matches.forEach((m:any)=>{
+        ri[m.id]=state.results[m.id]||{h:'',a:''}
+        er[m.id]=state.results[m.id]?.extra||{quemAvanca:'',foiPenaltis:false}
+      })
+      setResultInputs(ri); setExtraResults(er)
     } else { setModalError('Senha incorreta.') }
   }
 
   function logout() { setCurrentUser(null); setIsAdmin(false); setAuthPassword(''); setActiveTab('home') }
 
   function getCurrentPhase(s: any) {
-    const phase = s.round.phase
-    return s.scoringPhases.find((p:any)=>p.name.toLowerCase().includes(phase))||s.scoringPhases[0]
+    return s.scoringPhases.find((p:any)=>p.name.toLowerCase().includes(s.round.phase))||s.scoringPhases[0]
+  }
+
+  function getMultiplier(s: any) { return PHASE_MULTIPLIERS[s.round.phase]??1 }
+
+  // PARCIAL: ordena por pts da rodada, depois total
+  function parcialData(s: any) {
+    return PLAYERS.map(p=>({
+      name: p,
+      roundPts: Object.values(s.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number,
+      total: s.totalPoints[p]||0,
+      hasPal: s.palpites[p]&&Object.keys(s.palpites[p]).length>0,
+    })).sort((a,b)=>{
+      if(b.roundPts !== a.roundPts) return b.roundPts - a.roundPts
+      return b.total - a.total
+    })
   }
 
   function rankingData(s: any) {
     return PLAYERS.map(p=>({
       name:p, total:s.totalPoints[p]||0,
-      rodadas:s.roundHistory.filter((r:any)=>r.scores&&r.scores[p]!==undefined).length
-    })).sort((a:any,b:any)=>b.total-a.total)
+      rodadas:s.roundHistory.filter((r:any)=>r.scores&&r.scores[p]!==undefined).length,
+      exact: s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.exact||0),0),
+      correct: s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.correct||0),0),
+    })).sort((a:any,b:any)=>{
+      if(b.total!==a.total) return b.total-a.total
+      if(b.exact!==a.exact) return b.exact-a.exact
+      return b.correct-a.correct
+    })
   }
 
   async function savePalpites() {
@@ -166,8 +258,9 @@ export default function Home() {
     if(!state.palpitesOpen){showNotif('Palpites bloqueados!','error');return}
     const newState = JSON.parse(JSON.stringify(state))
     if(!newState.palpites[currentUser]) newState.palpites[currentUser]={}
-    state.round.matches.forEach((m:any)=>{
-      const pal=localPalpites[m.id]||{h:'',a:'',classify:''}
+    state.round.matches.forEach((m:any, idx:number)=>{
+      if(isMatchLocked(m,idx)) return
+      const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
       newState.palpites[currentUser][m.id]=pal
     })
     newState.palpiteTimes[currentUser]=new Date().toISOString()
@@ -183,19 +276,33 @@ export default function Home() {
     newState.roundFinalized=false
     await saveState(newState, authPassword)
     showNotif('Rodada salva!')
-    const ri:any={}; adminBuf.matches.forEach((m:any)=>{ ri[m.id]=newState.results[m.id]||{h:'',a:''} }); setResultInputs(ri)
+    const ri:any={}; const er:any={}
+    adminBuf.matches.forEach((m:any)=>{
+      ri[m.id]=newState.results[m.id]||{h:'',a:''}
+      er[m.id]=newState.results[m.id]?.extra||{quemAvanca:'',foiPenaltis:false}
+    })
+    setResultInputs(ri); setExtraResults(er)
   }
 
   async function applyCorrection() {
     if(!state) return
     const newState = JSON.parse(JSON.stringify(state))
-    state.round.matches.forEach((m:any)=>{ const r=resultInputs[m.id]; if(r&&r.h!==''&&r.a!=='') newState.results[m.id]=r })
-    const phase=getCurrentPhase(newState)
+    const phase = getCurrentPhase(newState)
+    const mult = getMultiplier(newState)
+    const scoreMult = newState.multipliers||defaultMultipliers()
+    state.round.matches.forEach((m:any)=>{
+      const r=resultInputs[m.id]
+      if(r&&r.h!==''&&r.a!=='') newState.results[m.id]={...r, extra:extraResults[m.id]||{quemAvanca:'',foiPenaltis:false}}
+    })
     PLAYERS.forEach(p=>{
       if(!newState.correctedScores[p]) newState.correctedScores[p]={}
       newState.round.matches.forEach((m:any)=>{
-        const pal=newState.palpites[p]?.[m.id]; const res=newState.results[m.id]
-        if(pal&&res){ const pts=calcPoints(pal,res,phase); if(pts!==null) newState.correctedScores[p][m.id]=pts }
+        const pal=newState.palpites[p]?.[m.id]
+        const res=newState.results[m.id]
+        if(pal&&res){
+          const pts=calcPoints(pal,res,phase,mult,m,res.extra,scoreMult)
+          if(pts!==null) newState.correctedScores[p][m.id]=pts
+        }
       })
     })
     await saveState(newState, authPassword); showNotif('Pontuação calculada! ⚡')
@@ -213,9 +320,26 @@ export default function Home() {
 
   async function finalizeRound() {
     if(!state||!confirm('Finalizar a rodada? Pontuações serão registradas.')) return
-    const newState=JSON.parse(JSON.stringify(state)); const scores:any={}
-    PLAYERS.forEach(p=>{ scores[p]=Object.values(newState.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number; newState.totalPoints[p]=(newState.totalPoints[p]||0)+scores[p] })
-    newState.roundHistory.push({roundName:newState.round.name,scores})
+    const newState=JSON.parse(JSON.stringify(state))
+    const scores:any={}; const tiebreak:any={}
+    PLAYERS.forEach(p=>{
+      scores[p]=Object.values(newState.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
+      newState.totalPoints[p]=(newState.totalPoints[p]||0)+scores[p]
+      let exact=0, correct=0
+      newState.round.matches.forEach((m:any)=>{
+        const pal=newState.palpites[p]?.[m.id]; const res=newState.results[m.id]
+        if(pal&&res&&res.h!==''&&res.a!==''){
+          const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a)
+          if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)){
+            if(ph===rh&&pa===ra) { exact++; correct++ }
+            else if((ph-pa)===(rh-ra)) correct++
+            else { const pw=ph>pa?1:ph<pa?-1:0,rw=rh>ra?1:rh<ra?-1:0; if(pw===rw) correct++ }
+          }
+        }
+      })
+      tiebreak[p]={exact,correct}
+    })
+    newState.roundHistory.push({roundName:newState.round.name,scores,tiebreak})
     newState.palpites={}; newState.palpiteTimes={}; newState.correctedScores={}; newState.results={}
     newState.roundFinalized=true; newState.round.name=''; newState.round.matches=[]
     await saveState(newState, authPassword); showNotif('Rodada finalizada! 🏆')
@@ -228,15 +352,29 @@ export default function Home() {
     await saveState(newState, authPassword); showNotif('Palpites limpos.','error')
   }
 
+  async function resetAll() {
+    if(!state) return
+    if(resetConfirm !== 'ZERAR') { showNotif('Digite ZERAR para confirmar','error'); return }
+    const fresh = defaultState()
+    fresh.adminPass = state.adminPass
+    fresh.scoringPhases = state.scoringPhases
+    fresh.multipliers = state.multipliers
+    await saveState(fresh, authPassword)
+    setShowResetModal(false)
+    setResetConfirm('')
+    showNotif('Dados zerados com sucesso!', 'error')
+  }
+
   async function saveScoringConfig() {
     if(!state) return
-    const newState=JSON.parse(JSON.stringify(state)); newState.scoringPhases=scoringPhases
+    const newState=JSON.parse(JSON.stringify(state))
+    newState.scoringPhases=scoringPhases; newState.multipliers=multipliersBuf
     await saveState(newState, authPassword); showNotif('Pontuação salva!')
   }
 
   async function saveShame() {
     if(!state) return
-    const newState=JSON.parse(JSON.stringify(state)); newState.shame={player:shamePlayer,photoUrl:shameUrl,text:shameText}
+    const newState=JSON.parse(JSON.stringify(state)); newState.shame={player:shamePlayer,photoUrl:shameUrl}
     await saveState(newState, authPassword); showNotif('Salvo!')
   }
 
@@ -252,134 +390,197 @@ export default function Home() {
   if(!state) return null
 
   const sorted = rankingData(state)
+  const parcial = parcialData(state)
   const palpitaramCount = PLAYERS.filter(p=>state.palpites[p]&&Object.keys(state.palpites[p]).length>0).length
-  const currentPhase = getCurrentPhase(state)
-  const showClassify = currentPhase?.hasClassify===true
+  const mult = getMultiplier(state)
+  const dm = darkMode
+
+  const C = dm ? {
+    bg:'#001a0a', bgPanel:'rgba(0,30,15,0.85)', bgCard:'rgba(0,50,25,0.7)',
+    bgRow:'rgba(0,20,10,0.5)', bgInput:'rgba(0,40,20,0.8)', bgStat:'rgba(0,50,25,0.5)',
+    bgMatchCard:'rgba(0,30,15,0.7)', bgTabsNav:'rgba(0,20,10,0.5)',
+    bgTableHead:'rgba(0,40,20,0.9)', bgAdminCard:'rgba(0,20,10,0.6)',
+    border:'rgba(212,175,55,0.4)', borderFaint:'rgba(212,175,55,0.15)',
+    text:'#FAFAFA', textMuted:'#B0A080', textSub:'rgba(255,255,255,0.2)',
+    gold:'#D4AF37', goldLight:'#F0D060', goldDark:'#A07820',
+    red:'#C0392B', green:'#00A651',
+    shadow:'0 2px 16px rgba(0,0,0,0.6)',
+    headerBg:'transparent',
+  } : {
+    bg:'#f0f4f0', bgPanel:'rgba(255,255,255,0.95)', bgCard:'rgba(255,255,255,0.9)',
+    bgRow:'rgba(240,248,240,0.8)', bgInput:'rgba(230,245,230,0.9)', bgStat:'rgba(255,255,255,0.9)',
+    bgMatchCard:'rgba(255,255,255,0.85)', bgTabsNav:'rgba(220,240,220,0.7)',
+    bgTableHead:'rgba(10,80,40,0.9)', bgAdminCard:'rgba(240,250,240,0.8)',
+    border:'rgba(0,100,50,0.35)', borderFaint:'rgba(0,100,50,0.15)',
+    text:'#0a1a0a', textMuted:'#4a6a4a', textSub:'rgba(0,0,0,0.2)',
+    gold:'#8a6800', goldLight:'#b08800', goldDark:'#6a5000',
+    red:'#c0392b', green:'#007a30',
+    shadow:'0 2px 16px rgba(0,0,0,0.12)',
+    headerBg:'rgba(0,60,20,0.95)',
+  }
 
   return (
     <>
       <style>{`
-        :root{--gold:#D4AF37;--gold-light:#F0D060;--gold-dark:#A07820;--green-mid:#006633;--bg-panel:rgba(0,30,15,0.85);--bg-card:rgba(0,50,25,0.7);--border-gold:1px solid rgba(212,175,55,0.4);--text-light:#FAFAFA;--text-muted:#B0A080;--red:#C0392B;--green-bright:#00A651;--radius:8px;}
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500;600&display=swap');
+        :root{
+          --gold:${C.gold};--gold-light:${C.goldLight};--gold-dark:${C.goldDark};
+          --green-mid:#006633;--bg-panel:${C.bgPanel};--bg-card:${C.bgCard};
+          --border-gold:1px solid ${C.border};--text-light:${C.text};--text-muted:${C.textMuted};
+          --red:${C.red};--green-bright:${C.green};--radius:8px;
+        }
         *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
         button,input,select{touch-action:manipulation;-webkit-appearance:none;appearance:none;font-family:inherit;}
-        body{font-family:'Barlow',sans-serif;background:#001a0a;color:var(--text-light);min-height:100vh;overflow-x:hidden;}
-        body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(0,100,50,.25) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(0,40,100,.2) 0%,transparent 50%);pointer-events:none;z-index:0;}
-        body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg width='60' height='52' viewBox='0 0 60 52' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0 L60 15 L60 37 L30 52 L0 37 L0 15Z' fill='none' stroke='rgba(212,175,55,0.04)' stroke-width='1'/%3E%3C/svg%3E");background-size:60px 52px;pointer-events:none;z-index:0;}
+        html{overflow-x:hidden;}
+        body{font-family:'Barlow',sans-serif;background:${C.bg};color:${C.text};min-height:100vh;overflow-x:hidden;max-width:100%;transition:background .3s,color .3s;}
+        ${dm?`body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(0,100,50,.25) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(0,40,100,.2) 0%,transparent 50%);pointer-events:none;z-index:0;}
+        body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg width='60' height='52' viewBox='0 0 60 52' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0 L60 15 L60 37 L30 52 L0 37 L0 15Z' fill='none' stroke='rgba(212,175,55,0.04)' stroke-width='1'/%3E%3C/svg%3E");background-size:60px 52px;pointer-events:none;z-index:0;}`:''}
         .app{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 16px 60px;}
-        header{text-align:center;padding:20px 0 16px;border-bottom:var(--border-gold);}
+        header{text-align:center;padding:20px 16px 16px;border-bottom:var(--border-gold);max-width:1200px;margin:0 auto;box-sizing:border-box;background:${C.headerBg};}
         .header-badge{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold-dark);padding:3px 12px;border-radius:20px;margin-bottom:8px;}
         header h1{font-family:'Bebas Neue',sans-serif;letter-spacing:4px;line-height:1;margin-bottom:4px;display:flex;flex-direction:column;align-items:center;gap:2px;}
-        .h1-main{font-size:clamp(28px,5vw,48px);color:var(--text-light);}
-        .h1-sub{font-size:clamp(42px,8vw,80px);color:var(--gold);letter-spacing:4px;}
-        header h1 span{color:var(--gold);}
-        .header-sub{font-size:12px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;font-weight:300;}
-        .trophy-line{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 0;font-size:16px;}
+        .h1-main{font-size:clamp(28px,5vw,48px);color:${dm?'#FAFAFA':'#fff'};}
+        .h1-sub{font-size:clamp(42px,8vw,80px);color:${dm?C.gold:'#F0D060'};letter-spacing:4px;}
+        .header-sub{font-size:12px;color:${dm?C.textMuted:'rgba(255,255,255,0.7)'};letter-spacing:2px;text-transform:uppercase;font-weight:300;}
+        .trophy-line{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 0;font-size:16px;overflow:hidden;}
+        .theme-btn{position:absolute;right:16px;top:20px;background:${dm?'rgba(0,50,25,0.6)':'rgba(255,255,255,0.2)'};border:1px solid ${dm?C.border:'rgba(255,255,255,0.3)'};color:${dm?C.gold:'#fff'};font-size:16px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
         #login-screen{min-height:calc(100vh - 120px);display:flex;align-items:center;justify-content:center;}
-        .login-box{background:var(--bg-panel);border:var(--border-gold);border-radius:16px;padding:24px 20px;width:100%;max-width:420px;text-align:center;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
+        .login-box{background:${C.bgPanel};border:var(--border-gold);border-radius:16px;padding:24px 20px;width:100%;max-width:420px;text-align:center;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
         .login-box h2{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--gold);margin-bottom:6px;}
         .login-box p{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
         .player-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px;}
-        .player-btn{background:rgba(0,60,30,.6);border:1px solid rgba(212,175,55,.25);color:var(--text-light);font-size:13px;font-weight:500;padding:10px 8px;border-radius:6px;cursor:pointer;transition:all .2s;width:100%;}
-        .player-btn:active{background:rgba(0,100,50,.6);border-color:var(--gold);color:var(--gold);}
-        .admin-login-btn{width:100%;background:transparent;border:1px solid rgba(212,175,55,.3);color:var(--text-muted);font-size:12px;padding:8px;border-radius:6px;cursor:pointer;margin-top:8px;letter-spacing:1px;}
+        .player-btn{background:${dm?'rgba(0,60,30,.6)':'rgba(0,80,40,.08)'};border:1px solid ${dm?'rgba(212,175,55,.25)':C.border};color:${C.text};font-size:13px;font-weight:500;padding:10px 8px;border-radius:6px;cursor:pointer;transition:all .2s;width:100%;}
+        .player-btn:active{background:${dm?'rgba(0,100,50,.6)':'rgba(0,100,50,.15)'};border-color:var(--gold);color:var(--gold);}
+        .admin-login-btn{width:100%;background:transparent;border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:var(--text-muted);font-size:12px;padding:8px;border-radius:6px;cursor:pointer;margin-top:8px;letter-spacing:1px;}
         .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);}
         .modal-overlay.open{display:flex;}
-        .modal{background:#001a0a;border:var(--border-gold);border-radius:12px;padding:28px 22px;width:92%;max-width:360px;text-align:center;}
+        .modal{background:${dm?'#001a0a':C.bgPanel};border:var(--border-gold);border-radius:12px;padding:28px 22px;width:92%;max-width:360px;text-align:center;}
         .modal h3{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--gold);margin-bottom:6px;}
         .modal p{font-size:13px;color:var(--text-muted);margin-bottom:18px;}
-        .modal input{width:100%;background:rgba(0,40,20,.8);border:1px solid rgba(212,175,55,.3);color:var(--text-light);font-size:15px;padding:12px 16px;border-radius:6px;margin-bottom:12px;outline:none;text-align:center;letter-spacing:3px;}
+        .modal input{width:100%;background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:${C.text};font-size:15px;padding:12px 16px;border-radius:6px;margin-bottom:12px;outline:none;text-align:center;letter-spacing:2px;}
         .modal-btns{display:flex;gap:10px;}
         .modal-error{font-size:12px;color:#e74c3c;margin-top:6px;min-height:16px;}
         .btn-primary{flex:1;background:var(--gold);color:#001a0a;border:none;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;padding:12px;border-radius:6px;cursor:pointer;}
-        .btn-secondary{flex:1;background:transparent;color:var(--text-muted);border:1px solid rgba(255,255,255,.15);font-size:13px;padding:12px;border-radius:6px;cursor:pointer;}
+        .btn-secondary{flex:1;background:transparent;color:var(--text-muted);border:1px solid ${dm?'rgba(255,255,255,.15)':C.border};font-size:13px;padding:12px;border-radius:6px;cursor:pointer;}
         .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:var(--border-gold);margin-bottom:22px;gap:10px;flex-wrap:wrap;}
         .topbar-user{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
-        .user-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green-mid),#003F8A);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--gold);font-family:'Barlow Condensed',sans-serif;flex-shrink:0;}
-        .user-name{font-size:14px;font-weight:500;color:var(--text-light);}
+        .user-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#006633,#003F8A);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--gold);font-family:'Barlow Condensed',sans-serif;flex-shrink:0;}
+        .user-name{font-size:14px;font-weight:500;color:${C.text};}
         .user-role{font-size:11px;color:var(--text-muted);}
         .topbar-actions{display:flex;gap:8px;flex-shrink:0;}
         .btn-sm{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1px;padding:7px 14px;border-radius:5px;cursor:pointer;border:none;}
         .btn-gold{background:var(--gold);color:#001a0a;}
-        .btn-outline{background:transparent;border:1px solid rgba(212,175,55,.3);color:var(--text-muted);}
-        .btn-danger{background:var(--red);color:white;}
-        .btn-green{background:var(--green-bright);color:white;}
-        .tabs-nav{display:flex;gap:2px;background:rgba(0,20,10,.5);border:var(--border-gold);border-radius:8px;padding:4px;margin-bottom:22px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+        .btn-outline{background:transparent;border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:var(--text-muted);}
+        .btn-danger{background:${C.red};color:white;}
+        .btn-green{background:${C.green};color:white;}
+        .tabs-nav{display:flex;gap:2px;background:${C.bgTabsNav};border:var(--border-gold);border-radius:8px;padding:4px;margin-bottom:22px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
         .tabs-nav::-webkit-scrollbar{display:none;}
         .tab-btn{flex:0 0 auto;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;padding:9px 16px;border-radius:5px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;white-space:nowrap;}
         .tab-btn.active{background:var(--gold);color:#001a0a;}
         .section-title{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--gold);margin-bottom:4px;display:flex;align-items:center;gap:10px;}
-        .section-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,rgba(212,175,55,.4),transparent);}
+        .section-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,${C.border},transparent);}
         .section-sub{font-size:12px;color:var(--text-muted);margin-bottom:16px;}
-        .card{background:var(--bg-card);border:var(--border-gold);border-radius:var(--radius);padding:20px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+        .card{background:${C.bgCard};border:var(--border-gold);border-radius:var(--radius);padding:20px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
         .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
         .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-        .stat-card{background:rgba(0,50,25,.5);border:var(--border-gold);border-radius:var(--radius);padding:16px 12px;text-align:center;}
+        .stat-card{background:${C.bgStat};border:var(--border-gold);border-radius:var(--radius);padding:16px 12px;text-align:center;}
         .stat-value{font-family:'Bebas Neue',sans-serif;font-size:34px;color:var(--gold);line-height:1;}
         .stat-label{font-size:11px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}
         .table-wrap{overflow-x:auto;border-radius:var(--radius);border:var(--border-gold);-webkit-overflow-scrolling:touch;}
-        table.dt{width:100%;border-collapse:collapse;font-size:13px;min-width:360px;}
-        .dt thead th{background:rgba(0,40,20,.9);color:var(--gold);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:10px 14px;text-align:left;border-bottom:var(--border-gold);white-space:nowrap;}
-        .dt tbody td{padding:9px 14px;border-bottom:1px solid rgba(212,175,55,.07);color:var(--text-light);vertical-align:middle;}
+        table.dt{width:100%;border-collapse:collapse;font-size:13px;}
+        .dt thead th{background:${C.bgTableHead};color:${dm?C.gold:'#F0D060'};font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:var(--border-gold);white-space:nowrap;}
+        .dt thead th.c{text-align:center;}.dt thead th.r{text-align:right;}
+        .dt tbody td{padding:10px 12px;border-bottom:1px solid ${C.borderFaint};color:${C.text};vertical-align:middle;white-space:nowrap;background:${dm?'transparent':C.bgRow};}
         .dt tbody tr:last-child td{border-bottom:none;}
         .dt td.c{text-align:center;}.dt td.r{text-align:right;}
-        .pos-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;}
-        .p1{background:var(--gold);color:#001a0a;}.p2{background:#9E9E9E;color:#001a0a;}.p3{background:#CD7F32;color:white;}.pn{background:rgba(255,255,255,.08);color:var(--text-muted);}
+        .pos-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;flex-shrink:0;}
+        .p1{background:var(--gold);color:#001a0a;}.p2{background:#9E9E9E;color:#001a0a;}.p3{background:#CD7F32;color:white;}.pn{background:${dm?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)'};color:var(--text-muted);}
         .pts-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:22px;border-radius:4px;font-size:11px;font-weight:700;padding:0 5px;}
-        .pts-5{background:rgba(0,166,81,.3);color:#00c060;border:1px solid rgba(0,166,81,.4);}
+        .pts-5{background:rgba(0,166,81,.3);color:${dm?'#00c060':C.green};border:1px solid rgba(0,166,81,.4);}
         .pts-3{background:rgba(212,175,55,.2);color:var(--gold);border:1px solid rgba(212,175,55,.35);}
-        .pts-1{background:rgba(255,255,255,.08);color:var(--text-muted);border:1px solid rgba(255,255,255,.12);}
+        .pts-1{background:${dm?'rgba(255,255,255,.08)':'rgba(0,0,0,.08)'};color:var(--text-muted);border:1px solid ${dm?'rgba(255,255,255,.12)':'rgba(0,0,0,.12)'};}
         .pts-0{background:rgba(192,57,43,.2);color:#e74c3c;border:1px solid rgba(192,57,43,.25);}
-        .pal-hdr{background:linear-gradient(135deg,rgba(0,60,30,.8),rgba(0,40,80,.5));border:var(--border-gold);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+        .pal-hdr{background:${dm?'linear-gradient(135deg,rgba(0,60,30,.8),rgba(0,40,80,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,40,80,.08))'};border:var(--border-gold);border-radius:var(--radius);padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
         .pal-rname{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);}
-        .st-open{color:var(--green-bright);font-size:11px;letter-spacing:2px;text-transform:uppercase;}
-        .st-closed{color:var(--red);font-size:11px;letter-spacing:2px;text-transform:uppercase;}
-        .match-card{background:rgba(0,30,15,.7);border:1px solid rgba(212,175,55,.15);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-        .match-teams{flex:1;min-width:160px;display:flex;align-items:center;gap:8px;}
-        .team-flag{font-size:20px;}.team-name{font-size:13px;font-weight:500;}.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--text-muted);}
-        .score-grp{display:flex;align-items:center;gap:6px;}
-        .score-in{width:46px;height:46px;background:rgba(0,50,25,.8);border:1px solid rgba(212,175,55,.3);color:var(--text-light);font-family:'Bebas Neue',sans-serif;font-size:22px;text-align:center;border-radius:6px;outline:none;}
+        .st-open{color:${C.green};font-size:11px;letter-spacing:2px;text-transform:uppercase;}
+        .st-closed{color:${C.red};font-size:11px;letter-spacing:2px;text-transform:uppercase;}
+        .match-card{background:${C.bgMatchCard};border:1px solid ${C.borderFaint};border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;box-shadow:${C.shadow};}
+        .match-card.locked{opacity:.65;border-color:${dm?'rgba(192,57,43,.3)':'rgba(192,57,43,.4)'};}
+        .match-teams{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;}
+        .team-flag{font-size:24px;}.team-name{font-size:15px;font-weight:600;color:${C.text};}.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold);}
+        .score-grp{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;}
+        .score-in{width:56px;height:56px;background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:${C.text};font-family:'Bebas Neue',sans-serif;font-size:26px;text-align:center;border-radius:6px;outline:none;}
         .score-in:focus{border-color:var(--gold);}
-        .score-in:disabled{opacity:.4;}
-        .score-sep{font-family:'Bebas Nye',sans-serif;font-size:18px;color:var(--text-muted);}
-        .classify-sel{background:rgba(0,50,25,.8);border:1px solid rgba(212,175,55,.3);color:var(--text-light);font-size:12px;padding:6px 10px;border-radius:6px;outline:none;cursor:pointer;}
-        .classify-sel:disabled{opacity:.4;}
-        .match-time{font-size:11px;color:var(--text-muted);letter-spacing:1px;}
-        .shame-box{background:linear-gradient(135deg,rgba(50,0,0,.4),rgba(20,0,8,.3));border:1px solid rgba(192,57,43,.3);border-radius:var(--radius);padding:18px;text-align:center;}
+        .score-in:disabled{opacity:.4;cursor:not-allowed;}
+        .score-sep{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text-muted);}
+        .classify-sel{background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:${C.text};font-size:13px;padding:8px 12px;border-radius:6px;outline:none;cursor:pointer;width:100%;max-width:240px;}
+        .classify-sel:disabled{opacity:.4;cursor:not-allowed;}
+        .match-time{font-size:12px;color:var(--text-muted);letter-spacing:1px;width:100%;text-align:center;}
+        .lock-badge{font-size:11px;color:${C.red};letter-spacing:1px;font-family:'Barlow Condensed',sans-serif;}
+        .extras-row{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;}
+        .extra-label{font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}
+        .penaltis-grp{display:flex;gap:10px;justify-content:center;}
+        .pen-btn{background:${dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.08)'};border:1px solid ${dm?'rgba(212,175,55,.25)':C.border};color:${C.text};font-size:13px;padding:8px 20px;border-radius:6px;cursor:pointer;transition:all .2s;}
+        .pen-btn.selected{background:var(--gold);color:#001a0a;border-color:var(--gold);}
+        .pen-btn:disabled{opacity:.4;cursor:not-allowed;}
+        .shame-box{background:${dm?'linear-gradient(135deg,rgba(50,0,0,.4),rgba(20,0,8,.3))':'rgba(255,240,240,.6)'};border:1px solid rgba(192,57,43,.3);border-radius:var(--radius);padding:18px;text-align:center;}
         .shame-ttl{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#e74c3c;margin-bottom:4px;}
         .shame-sub{font-size:11px;color:var(--text-muted);margin-bottom:12px;}
         .parcial-chip{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;padding:3px 10px;border-radius:4px;text-transform:uppercase;}
         .chip-p{background:rgba(212,175,55,.15);color:var(--gold);border:1px solid rgba(212,175,55,.35);}
-        .chip-f{background:rgba(0,166,81,.15);color:var(--green-bright);border:1px solid rgba(0,166,81,.3);}
+        .chip-f{background:rgba(0,166,81,.15);color:${C.green};border:1px solid rgba(0,166,81,.3);}
+        .mult-badge{display:inline-flex;align-items:center;justify-content:center;background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.35);color:var(--gold);font-family:'Bebas Neue',sans-serif;font-size:13px;padding:2px 8px;border-radius:4px;letter-spacing:1px;}
         .a-warn{background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.28);border-radius:var(--radius);padding:10px 14px;font-size:12px;color:#d08070;margin-bottom:16px;}
-        .a-card{background:rgba(0,20,10,.6);border:1px solid rgba(212,175,55,.2);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+        .a-card{background:${C.bgAdminCard};border:1px solid ${C.border};border-radius:var(--radius);padding:16px;margin-bottom:12px;}
         .a-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
         .a-lbl{font-size:11px;color:var(--text-muted);letter-spacing:1px;min-width:80px;text-transform:uppercase;}
-        .a-in{background:rgba(0,40,20,.8);border:1px solid rgba(212,175,55,.25);color:var(--text-light);font-size:13px;padding:7px 12px;border-radius:5px;outline:none;}
+        .a-in{background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.25)':C.border};color:${C.text};font-size:13px;padding:7px 12px;border-radius:5px;outline:none;}
         .a-in.sm{width:60px;text-align:center;}.a-in.md{width:150px;}.a-in.lg{flex:1;min-width:140px;}
-        .a-sel{background:rgba(0,40,20,.8);border:1px solid rgba(212,175,55,.25);color:var(--text-light);font-size:13px;padding:7px 12px;border-radius:5px;outline:none;cursor:pointer;}
+        .a-sel{background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.25)':C.border};color:${C.text};font-size:13px;padding:7px 12px;border-radius:5px;outline:none;cursor:pointer;}
         .toggle{position:relative;display:inline-block;width:40px;height:22px;}
         .toggle input{opacity:0;width:0;height:0;}
-        .tsl{position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,.13);border-radius:22px;transition:.2s;}
+        .tsl{position:absolute;cursor:pointer;inset:0;background:${dm?'rgba(255,255,255,.13)':'rgba(0,0,0,.13)'};border-radius:22px;transition:.2s;}
         .tsl::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.2s;}
-        .toggle input:checked+.tsl{background:var(--green-bright);}
+        .toggle input:checked+.tsl{background:${C.green};}
         .toggle input:checked+.tsl::before{transform:translateX(18px);}
-        .corr-p{background:rgba(0,20,10,.6);border:1px solid rgba(212,175,55,.15);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;}
-        .corr-h{background:rgba(0,40,20,.6);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px;touch-action:manipulation;}
-        .corr-n{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:1px;}
+        .extras-admin{background:${dm?'rgba(0,60,30,.3)':'rgba(0,80,40,.06)'};border:1px solid ${C.borderFaint};border-radius:6px;padding:10px 12px;margin-top:8px;}
+        .extras-admin-title{font-size:11px;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;font-weight:600;}
+        .extras-checks{display:flex;gap:16px;flex-wrap:wrap;}
+        .extra-check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;}
+        .extra-check input{width:14px;height:14px;cursor:pointer;accent-color:var(--gold);}
+        .corr-p{background:${C.bgAdminCard};border:1px solid ${C.borderFaint};border-radius:var(--radius);margin-bottom:8px;overflow:hidden;}
+        .corr-h{background:${dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.08)'};padding:10px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:10px;touch-action:manipulation;}
+        .corr-n{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:1px;color:${C.text};}
         .corr-pts{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);}
-        .corr-b{padding:14px;border-top:1px solid rgba(212,175,55,.1);}
-        .corr-r{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(212,175,55,.06);flex-wrap:wrap;font-size:13px;}
+        .corr-b{padding:14px;border-top:1px solid ${C.borderFaint};}
+        .corr-r{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid ${dm?'rgba(212,175,55,.06)':'rgba(0,0,0,.06)'};flex-wrap:wrap;font-size:13px;}
         .corr-r:last-child{border-bottom:none;}
-        .add-btn{width:100%;background:rgba(0,40,20,.5);border:1px dashed rgba(212,175,55,.3);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;padding:10px;border-radius:var(--radius);cursor:pointer;margin-top:8px;}
+        .add-btn{width:100%;background:${dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)'};border:1px dashed ${dm?'rgba(212,175,55,.3)':C.border};color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:1px;padding:10px;border-radius:var(--radius);cursor:pointer;margin-top:8px;}
         .rm-btn{background:transparent;border:1px solid rgba(192,57,43,.3);color:rgba(192,57,43,.7);font-size:11px;padding:4px 10px;border-radius:4px;cursor:pointer;}
         .notif-bar{position:fixed;top:0;left:0;right:0;background:var(--gold);color:#001a0a;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:2px;padding:4px;z-index:9998;}
-        .notif-box{position:fixed;top:18px;right:18px;background:rgba(0,30,15,.97);border:1px solid var(--gold);border-radius:8px;padding:12px 18px;font-size:13px;color:var(--text-light);z-index:9999;max-width:260px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+        .notif-box{position:fixed;top:18px;right:18px;background:${dm?'rgba(0,30,15,.97)':C.bgPanel};border:1px solid var(--gold);border-radius:8px;padding:12px 18px;font-size:13px;color:${C.text};z-index:9999;max-width:260px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
+        /* PARCIAL TABLE */
+        .parcial-table{width:100%;border-collapse:collapse;}
+        .parcial-table th{background:${C.bgTableHead};color:${dm?C.gold:'#F0D060'};font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:var(--border-gold);}
+        .parcial-table th.r{text-align:right;}
+        .parcial-table td{padding:10px 12px;border-bottom:1px solid ${C.borderFaint};color:${C.text};vertical-align:middle;}
+        .parcial-table tr:last-child td{border-bottom:none;}
+        .parcial-table td.r{text-align:right;}
+        .parcial-pts-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);}
+        .parcial-total-val{font-size:13px;color:var(--text-muted);}
+        .pending-banner{background:${dm?'rgba(212,175,55,.1)':'rgba(212,175,55,.15)'};border:1px solid ${dm?'rgba(212,175,55,.4)':'rgba(212,175,55,.5)'};border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;cursor:pointer;}
+        .rules-box{background:${dm?'rgba(0,30,15,.7)':'rgba(240,250,240,.8)'};border:var(--border-gold);border-radius:var(--radius);padding:16px 18px;}
+        .rules-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--gold);margin-bottom:10px;}
+        .rules-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:13px;color:${C.text};}
+        .rules-bullet{color:var(--gold);font-weight:700;flex-shrink:0;}
+        .reset-box{background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.3);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+        .reset-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#e74c3c;margin-bottom:6px;}
+        .reset-desc{font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5;}
         @media(max-width:600px){
           .grid-4{grid-template-columns:1fr 1fr;gap:8px;}.stat-card{padding:12px 10px;}.stat-value{font-size:26px;}.stat-label{font-size:9px;}
           .grid-2{grid-template-columns:1fr;}
           .tab-btn{font-size:11px;padding:8px 10px;}
           .topbar-actions .btn-sm{padding:7px 12px;font-size:11px;}
-          .match-card{flex-direction:column;align-items:flex-start;}.match-teams{min-width:unset;width:100%;}.score-grp{width:100%;justify-content:center;}
           .a-row{flex-direction:column;align-items:flex-start;}.a-in.md,.a-in.lg,.a-sel{width:100%;}
           .modal-btns{flex-direction:column;}.notif-box{top:10px;right:10px;left:10px;max-width:unset;}
         }
@@ -387,28 +588,19 @@ export default function Home() {
       `}</style>
 
       {saving && <div className="notif-bar">SALVANDO...</div>}
-      {notif && <div className="notif-box" style={{borderColor:notif.type==='error'?'#e74c3c':'var(--gold)'}}>
+      {notif && <div className="notif-box" style={{borderColor:notif.type==='error'?'#e74c3c':C.gold}}>
         {notif.type==='error'?'✕ ':'★ '}{notif.msg}
       </div>}
 
-      {/* MODAL */}
+      {/* Modal Admin Login */}
       {showModal && <div className="modal-overlay open">
         <div className="modal">
           <h3>Acesso Admin</h3>
-          <div style={{
-            background:'rgba(192,57,43,0.12)',border:'1px solid rgba(192,57,43,0.4)',
-            borderRadius:8,padding:'10px 14px',marginBottom:14,
-            fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,letterSpacing:1,
-            color:'#e07060',lineHeight:1.4
-          }}>
-            🤡 Tá achando que é adm?<br/>
-            <b style={{color:'#e74c3c'}}>Saí daqui palhaço!</b>
+          <div style={{background:'rgba(192,57,43,0.12)',border:'1px solid rgba(192,57,43,0.4)',borderRadius:8,padding:'10px 14px',marginBottom:14,fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,letterSpacing:1,color:'#e07060',lineHeight:1.4}}>
+            🤡 Tá achando que é adm?<br/><b style={{color:'#e74c3c'}}>Saí daqui palhaço!</b>
           </div>
-          <p style={{fontSize:12,color:'var(--text-muted)',marginBottom:14}}>
-            (Se realmente for o administrador, digite a senha abaixo 👇)
-          </p>
-          <input type="password" value={adminPassInput} onChange={e=>setAdminPassInput(e.target.value)}
-            onKeyDown={e=>e.key==='Enter'&&checkAdminPass()} placeholder="••••••" autoFocus/>
+          <p style={{fontSize:12,color:C.textMuted,marginBottom:14}}>(Se realmente for o administrador, digite a senha abaixo 👇)</p>
+          <input type="password" value={adminPassInput} onChange={e=>setAdminPassInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&checkAdminPass()} placeholder="••••••" autoFocus/>
           <div className="modal-error">{modalError}</div>
           <div className="modal-btns">
             <button className="btn-secondary" onClick={()=>{setShowModal(false);setAdminPassInput('');setModalError('')}}>Cancelar</button>
@@ -417,16 +609,39 @@ export default function Home() {
         </div>
       </div>}
 
-      {/* HEADER */}
-      <header>
-        <div className="header-badge">⚽ Edição Especial</div>
-        <h1><span className="h1-main">PALPITÃO </span><span className="h1-sub">COPA DO MUNDO</span></h1>
-        <div className="header-sub">USA · México · Canadá</div>
-        <div className="trophy-line">🏆 <span style={{fontSize:12,color:'#A07820',letterSpacing:2}}>48 SELEÇÕES · 3 PAÍSES SEDE · 1 CAMPEÃO</span> 🏆</div>
-      </header>
+      {/* Modal Reset */}
+      {showResetModal && <div className="modal-overlay open">
+        <div className="modal">
+          <h3>⚠ Zerar Dados</h3>
+          <p style={{color:'#e74c3c',fontSize:13,marginBottom:12}}>Isso apagará TODOS os palpites, pontuações, histórico e resultados. A ação é irreversível!</p>
+          <p style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Digite <b style={{color:C.gold}}>ZERAR</b> para confirmar:</p>
+          <input
+            type="text"
+            value={resetConfirm}
+            onChange={e=>setResetConfirm(e.target.value)}
+            placeholder="ZERAR"
+            style={{letterSpacing:4,textTransform:'uppercase'}}
+          />
+          <div className="modal-btns" style={{marginTop:8}}>
+            <button className="btn-secondary" onClick={()=>{setShowResetModal(false);setResetConfirm('')}}>Cancelar</button>
+            <button style={{flex:1,background:C.red,color:'white',border:'none',fontFamily:"'Barlow Condensed'",fontSize:14,fontWeight:700,letterSpacing:2,padding:12,borderRadius:6,cursor:'pointer'}} onClick={resetAll}>ZERAR TUDO</button>
+          </div>
+        </div>
+      </div>}
+
+      <div style={{position:'relative'}}>
+        <header>
+          <div className="header-badge">⚽ Edição Especial</div>
+          <h1><span className="h1-main">PALPITÃO </span><span className="h1-sub">COPA DO MUNDO</span></h1>
+          <div className="header-sub">USA · México · Canadá</div>
+          <div className="trophy-line">🏆 <span style={{fontSize:11,color:dm?'#A07820':'rgba(255,255,255,0.7)',letterSpacing:1,whiteSpace:'nowrap'}}>48 SELEÇÕES · 3 PAÍSES SEDE · 1 CAMPEÃO</span> 🏆</div>
+        </header>
+        <button className="theme-btn" onClick={()=>setDarkMode(!dm)} title={dm?'Modo claro':'Modo escuro'}>
+          {dm?'☀️':'🌙'}
+        </button>
+      </div>
 
       <div className="app">
-        {/* LOGIN */}
         {!currentUser && <div id="login-screen">
           <div className="login-box">
             <h2>Entrar no Palpitão</h2>
@@ -438,7 +653,6 @@ export default function Home() {
           </div>
         </div>}
 
-        {/* MAIN APP */}
         {currentUser && <>
           <div className="topbar">
             <div className="topbar-user">
@@ -452,9 +666,9 @@ export default function Home() {
           </div>
 
           <div className="tabs-nav">
-            {['home','palpites','geral','ranking'].map(t=>(
+            {['home','palpites','geral','ranking','historico'].map(t=>(
               <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)}>
-                {t==='home'?'🏠 Início':t==='palpites'?'✏ Meus Palpites':t==='geral'?'📊 Tabela Geral':'🏆 Ranking'}
+                {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':'📅 Histórico'}
               </button>
             ))}
             {isAdmin && <button className={`tab-btn${activeTab==='admin'?' active':''}`} onClick={()=>setActiveTab('admin')}>⚙ Admin</button>}
@@ -462,8 +676,22 @@ export default function Home() {
 
           {/* HOME */}
           {activeTab==='home' && <div>
+            {!isAdmin && state.palpitesOpen && state.round.matches.length>0 && !state.roundFinalized && (()=>{
+              const myPal=state.palpites[currentUser!]||{}
+              const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx)&&(!myPal[m.id]||myPal[m.id].h===''))
+              return pendentes.length>0?(
+                <div className="pending-banner" onClick={()=>setActiveTab('palpites')}>
+                  <span style={{fontSize:20}}>⚠️</span>
+                  <div>
+                    <div style={{fontFamily:"'Barlow Condensed'",fontSize:14,fontWeight:600,color:C.gold,letterSpacing:1}}>PALPITE PENDENTE</div>
+                    <div style={{fontSize:12,color:C.textMuted}}>Você ainda não palpitou em {pendentes.length} jogo{pendentes.length>1?'s':''} desta rodada</div>
+                  </div>
+                  <span style={{marginLeft:'auto',color:C.gold,fontSize:18}}>→</span>
+                </div>
+              ):null
+            })()}
             <div className="grid-4" style={{marginBottom:20}}>
-              <div className="stat-card"><div className="stat-value">{state.round.name.split('-').pop()?.trim()||state.round.name}</div><div className="stat-label">Rodada</div></div>
+              <div className="stat-card"><div className="stat-value">{state.round.name.split('-').pop()?.trim()||state.round.name||'—'}</div><div className="stat-label">Rodada</div></div>
               <div className="stat-card"><div className="stat-value">{state.round.matches.length}</div><div className="stat-label">Jogos</div></div>
               <div className="stat-card"><div className="stat-value">{palpitaramCount}/{PLAYERS.length}</div><div className="stat-label">Palpitaram</div></div>
               <div className="stat-card"><div className="stat-value" style={{fontSize:sorted[0]?.name.length>8?18:34}}>{sorted[0]?.name.split(' ').slice(0,2).join(' ')||'—'}</div><div className="stat-label">Líder</div></div>
@@ -473,23 +701,34 @@ export default function Home() {
                 <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,flexWrap:'wrap'}}>
                   <div className="section-title" style={{marginBottom:0,fontSize:17}}>Parcial</div>
                   <span className={`parcial-chip ${state.roundFinalized?'chip-f':'chip-p'}`}>{state.roundFinalized?'FINALIZADA':'PARCIAL'}</span>
+                  {mult>1&&<span className="mult-badge">×{mult}</span>}
                 </div>
-                <div className="table-wrap">
-                  <table className="dt">
-                    <thead><tr><th>Participante</th><th className="r">Pts Rodada</th><th className="r">Total</th></tr></thead>
+                <div style={{background:C.bgRow,border:`1px solid ${C.border}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
+                  <table className="parcial-table">
+                    <thead>
+                      <tr>
+                        <th style={{width:32}}>#</th>
+                        <th>Participante</th>
+                        <th className="r">Pts Rod.</th>
+                        <th className="r">Total</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {PLAYERS.map((p,i)=>{
-                        const roundPts = Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
-                        const total=state.totalPoints[p]||0
-                        const hasPal=state.palpites[p]&&Object.keys(state.palpites[p]).length>0
-                        return <tr key={p}>
-                          <td>{posIcon(i)} {p}</td>
-                          <td className="r" style={{color:'var(--gold)'}}>
-                            {(roundPts as number)>0?(roundPts as number):hasPal?<span style={{color:'var(--text-muted)'}}>—</span>:<span style={{color:'rgba(192,57,43,.7)',fontSize:11}}>NP</span>}
+                      {parcial.map((d,i)=>(
+                        <tr key={d.name}>
+                          <td>{posIcon(i)}</td>
+                          <td style={{fontSize:13}}>{d.name}</td>
+                          <td className="r">
+                            {d.roundPts>0
+                              ? <span className="parcial-pts-val">{d.roundPts}</span>
+                              : d.hasPal
+                                ? <span style={{color:C.textMuted,fontSize:13}}>—</span>
+                                : <span style={{color:'rgba(192,57,43,.7)',fontSize:11,fontFamily:"'Barlow Condensed'",letterSpacing:1}}>NP</span>
+                            }
                           </td>
-                          <td className="r" style={{color:'var(--text-muted)'}}>{total}</td>
+                          <td className="r"><span className="parcial-total-val">{d.total}</span></td>
                         </tr>
-                      })}
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -498,8 +737,8 @@ export default function Home() {
                 <div className="shame-box">
                   <div className="shame-ttl">🤦 Pior Palpiteiro</div>
                   <div className="shame-sub">Administração atualiza após cada rodada</div>
-                  {state.shame.player && <>
-                    {state.shame.photoUrl && <img src={state.shame.photoUrl} alt="" style={{width:'100%',maxWidth:320,borderRadius:10,border:'2px solid rgba(192,57,43,.5)',display:'block',margin:'0 auto 10px',objectFit:'cover'}}/>}
+                  {state.shame.player&&<>
+                    {state.shame.photoUrl&&<img src={state.shame.photoUrl} alt="" style={{maxWidth:180,borderRadius:8,border:'2px solid rgba(192,57,43,.5)',display:'block',margin:'0 auto 10px'}}/>}
                     <div style={{fontFamily:"'Bebas Neue'",fontSize:16,color:'#e74c3c',letterSpacing:2}}>😂 {state.shame.player}</div>
                   </>}
                 </div>
@@ -510,48 +749,71 @@ export default function Home() {
                     PLAYERS.forEach(p=>{const pal=state.palpites[p]?.[m.id];if(pal&&pal.h!==''){const k=`${pal.h}x${pal.a}`;counts[k]=(counts[k]||0)+1}})
                     const entries=Object.entries(counts).sort((a:any,b:any)=>b[1]-a[1])
                     if(!entries.length) return null
-                    return <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid rgba(212,175,55,.08)',flexWrap:'wrap',gap:6}}>
-                      <span style={{color:'var(--text-muted)',fontSize:12}}>{m.home} x {m.away}</span>
+                    return <div key={m.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${C.borderFaint}`,flexWrap:'wrap',gap:6}}>
+                      <span style={{color:C.textMuted,fontSize:12}}>{m.home} x {m.away}</span>
                       <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                        {entries.map(([k,v]:any)=><span key={k} style={{background:'rgba(0,60,30,.5)',border:'1px solid rgba(212,175,55,.2)',padding:'2px 8px',borderRadius:4,fontSize:12}}><b style={{color:'var(--gold)'}}>{k}</b> <span style={{color:'var(--text-muted)'}}>{v}x</span></span>)}
+                        {entries.map(([k,v]:any)=><span key={k} style={{background:dm?'rgba(0,60,30,.5)':'rgba(0,80,40,.08)',border:`1px solid ${C.borderFaint}`,padding:'2px 8px',borderRadius:4,fontSize:12}}><b style={{color:C.gold}}>{k}</b> <span style={{color:C.textMuted}}>{v}x</span></span>)}
                       </span>
                     </div>
                   })}
                 </div>
               </div>
             </div>
-            <div className="card">
-              <div className="section-title" style={{fontSize:15}}>Pontuação</div>
-              {state.scoringPhases.map((ph:any)=>(
-                <div key={ph.id} style={{marginBottom:12}}>
-                  <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,fontWeight:600,color:'var(--gold)',letterSpacing:1,marginBottom:5}}>{ph.name}</div>
-                  {ph.rules.map((r:any,i:number)=>(
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
-                      <span className={`pts-badge pts-${r.pts}`}>{r.pts} pt{r.pts!==1?'s':''}</span>
-                      <span style={{fontSize:13}}>{r.desc}</span>
-                    </div>
-                  ))}
+            <div className="grid-2" style={{marginBottom:20}}>
+              <div className="card">
+                <div className="section-title" style={{fontSize:15}}>Pontuação</div>
+                {state.scoringPhases.map((ph:any)=>(
+                  <div key={ph.id} style={{marginBottom:12}}>
+                    <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,fontWeight:600,color:C.gold,letterSpacing:1,marginBottom:5}}>{ph.name}</div>
+                    {ph.rules.map((r:any,i:number)=>(
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+                        <span className={`pts-badge pts-${r.pts}`}>{r.pts} pt{r.pts!==1?'s':''}</span>
+                        <span style={{fontSize:13}}>{r.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.borderFaint}`,display:'flex',gap:12,flexWrap:'wrap'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:C.textMuted}}>
+                    <span className="pts-badge pts-3">+{state.multipliers?.quemAvanca??2}×</span>
+                    <span>Quem avança</span>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:C.textMuted}}>
+                    <span className="pts-badge pts-1">+{state.multipliers?.penaltisBonus??1}</span>
+                    <span>Bônus pênaltis</span>
+                  </div>
                 </div>
-              ))}
+              </div>
+              <div className="rules-box">
+                <div className="rules-title">📋 Regras do Palpite</div>
+                <div className="rules-item"><span className="rules-bullet">→</span><span>Prazo: jogo 1 trava no apito inicial; demais jogos travam 30min antes</span></div>
+                <div className="rules-item"><span className="rules-bullet">→</span><span>Edições liberadas até o prazo de cada jogo</span></div>
+                <div className="rules-item"><span className="rules-bullet">→</span><span>Quem não enviar até o prazo recebe 0 pontos</span></div>
+                <div className="rules-item"><span className="rules-bullet">→</span><span>Desempate: 1º placares exatos · 2º resultados corretos · 3º pedra papel tesoura ✂️</span></div>
+              </div>
             </div>
           </div>}
 
           {/* PALPITES */}
           {activeTab==='palpites' && <div>
             <div className="section-title">Meus Palpites</div>
-            {!state.palpitesOpen && <div className="a-warn">🔒 Palpites bloqueados. Aguarde a administração abrir.</div>}
+            {!state.palpitesOpen&&<div className="a-warn">🔒 Palpites bloqueados. Aguarde a administração abrir.</div>}
             <div className="pal-hdr">
               <div className="pal-rname">{state.round.name}</div>
-              <div className={state.palpitesOpen?'st-open':'st-closed'}>{state.palpitesOpen?'🟢 Abertos':'🔒 Fechados'}</div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {mult>1&&<span className="mult-badge">×{mult}</span>}
+                <div className={state.palpitesOpen?'st-open':'st-closed'}>{state.palpitesOpen?'🟢 Abertos':'🔒 Fechados'}</div>
+              </div>
             </div>
-            {state.round.matches.length===0 && <div style={{color:'var(--text-muted)',fontSize:13,padding:'20px 0'}}>Nenhum jogo configurado. Aguarde a administração.</div>}
-            {state.round.matches.map((m:any)=>{
-              const pal=localPalpites[m.id]||{h:'',a:'',classify:''}
-              const locked=!state.palpitesOpen
-              return <div key={m.id} className="match-card">
+            {state.round.matches.length===0&&<div style={{color:C.textMuted,fontSize:13,padding:'20px 0'}}>Nenhum jogo configurado. Aguarde a administração.</div>}
+            {state.round.matches.map((m:any,idx:number)=>{
+              const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
+              const locked=!state.palpitesOpen||isMatchLocked(m,idx)
+              const countdown=!locked?getCountdown(m,idx):null
+              return <div key={m.id} className={`match-card${locked?' locked':''}`}>
                 <div className="match-teams">
                   <span className="team-flag">{m.homeFlag||'🏳'}</span>
-                  <span className="team-name" style={{textAlign:'right'}}>{m.home}</span>
+                  <span className="team-name">{m.home}</span>
                   <span className="vs-txt">x</span>
                   <span className="team-name">{m.away}</span>
                   <span className="team-flag">{m.awayFlag||'🏳'}</span>
@@ -563,38 +825,68 @@ export default function Home() {
                   <input className="score-in" type="number" inputMode="numeric" min={0} max={20} value={pal.a} disabled={locked}
                     onChange={e=>setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],a:e.target.value}}))}/>
                 </div>
-                {(m.isElim||showClassify) && <div>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:3,letterSpacing:1}}>CLASSIFICA</div>
-                  <select className="classify-sel" disabled={locked} value={pal.classify}
-                    onChange={e=>setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],classify:e.target.value}}))}>
-                    <option value="">—</option>
-                    <option value={m.home}>{m.home}</option>
-                    <option value={m.away}>{m.away}</option>
-                  </select>
-                </div>}
-                <div className="match-time">⏱ {m.time||'—'}</div>
+                {m.hasQuemAvanca && (
+                  <div className="extras-row">
+                    <div className="extra-label">🏴 Quem avança?</div>
+                    <select
+                      className="classify-sel"
+                      disabled={locked}
+                      value={pal.quemAvanca||''}
+                      onChange={e=>setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],quemAvanca:e.target.value}}))}
+                    >
+                      <option value="">Selecione...</option>
+                      <option value={m.home}>{m.home}</option>
+                      <option value={m.away}>{m.away}</option>
+                    </select>
+                  </div>
+                )}
+                {m.hasPenaltis && (
+                  <div className="extras-row">
+                    <div className="extra-label">⚽ Vai para pênaltis?</div>
+                    <div className="penaltis-grp">
+                      <button
+                        type="button"
+                        className={`pen-btn${pal.penaltis==='sim'?' selected':''}`}
+                        disabled={locked}
+                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='sim'?'':' sim'}}))}
+                      >Sim</button>
+                      <button
+                        type="button"
+                        className={`pen-btn${pal.penaltis==='nao'?' selected':''}`}
+                        disabled={locked}
+                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='nao'?'':'nao'}}))}
+                      >Não</button>
+                    </div>
+                  </div>
+                )}
+                <div className="match-time">
+                  {locked
+                    ?<span className="lock-badge">🔒 Travado</span>
+                    :<span>⏱ {m.date?`${m.date} · `:''}{m.time||'—'}{countdown&&<span style={{color:C.goldLight,marginLeft:8,fontWeight:600}}>· fecha em {countdown}</span>}</span>
+                  }
+                </div>
               </div>
             })}
-            {state.palpitesOpen && <div style={{marginTop:14,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+            {state.palpitesOpen&&<div style={{marginTop:14,display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
               <button className="btn-sm btn-gold" style={{padding:'10px 24px',fontSize:14}} onClick={savePalpites} disabled={saving}>
                 💾 {saving?'Salvando...':'Salvar Palpites'}
               </button>
-              {state.palpiteTimes[currentUser!] && <span style={{fontSize:12,color:'var(--text-muted)'}}>
+              {state.palpiteTimes[currentUser!]&&<span style={{fontSize:12,color:C.textMuted}}>
                 Último: {new Date(state.palpiteTimes[currentUser!]).toLocaleString('pt-BR')}
               </span>}
             </div>}
           </div>}
 
           {/* GERAL */}
-          {activeTab==='geral' && <div>
+          {activeTab==='geral'&&<div>
             <div className="section-title">Tabela Geral</div>
             <div className="section-sub">Palpites da rodada atual</div>
             <div className="table-wrap">
               <table className="dt">
                 <thead><tr>
                   <th>Participante</th>
-                  {state.round.matches.map((m:any)=><th key={m.id} className="c">{m.home}<br/><span style={{fontSize:10,color:'rgba(212,175,55,.4)'}}>x</span><br/>{m.away}</th>)}
-                  <th className="r">Pts</th><th className="r">Horário</th>
+                  {state.round.matches.map((m:any)=><th key={m.id} className="c" style={{minWidth:80}}>{m.home}<br/><span style={{fontSize:10,color:dm?'rgba(212,175,55,.4)':'rgba(0,100,50,.4)'}}>x</span><br/>{m.away}</th>)}
+                  <th className="r">Pts</th><th className="r">Hora</th>
                 </tr></thead>
                 <tbody>
                   {PLAYERS.map(p=>{
@@ -602,18 +894,18 @@ export default function Home() {
                     const time=state.palpiteTimes[p]?new Date(state.palpiteTimes[p]).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—'
                     const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
                     return <tr key={p}>
-                      <td>{p}</td>
+                      <td style={{minWidth:100}}>{p}</td>
                       {state.round.matches.map((m:any)=>{
                         const myPal=pal[m.id]
-                        if(!myPal||myPal.h==='') return <td key={m.id} className="c"><span style={{color:'rgba(255,255,255,.2)'}}>—</span></td>
+                        if(!myPal||myPal.h==='') return <td key={m.id} className="c"><span style={{color:C.textSub}}>—</span></td>
                         const pts=state.correctedScores[p]?.[m.id]??null
                         return <td key={m.id} className="c">
                           <span style={{fontFamily:"'Bebas Neue'",fontSize:15}}>{myPal.h}×{myPal.a}</span>
-                          {pts!==null&&<><br/><span className={`pts-badge pts-${pts}`}>{pts}</span></>}
+                          {pts!==null&&<><br/><span className={`pts-badge pts-${Math.min(pts,5)}`}>{pts}</span></>}
                         </td>
                       })}
-                      <td className="r" style={{color:'var(--gold)',fontFamily:"'Bebas Neue'",fontSize:17}}>{(roundPts as number)>0?(roundPts as number):'—'}</td>
-                      <td className="r" style={{fontSize:11,color:'var(--text-muted)'}}>{time}</td>
+                      <td className="r" style={{color:C.gold,fontFamily:"'Bebas Neue'",fontSize:17}}>{(roundPts as number)>0?(roundPts as number):'—'}</td>
+                      <td className="r" style={{fontSize:11,color:C.textMuted}}>{time}</td>
                     </tr>
                   })}
                 </tbody>
@@ -622,26 +914,70 @@ export default function Home() {
           </div>}
 
           {/* RANKING */}
-          {activeTab==='ranking' && <div>
+          {activeTab==='ranking'&&<div>
             <div className="section-title">Ranking Geral</div>
-            <div className="section-sub">Pontuação acumulada</div>
+            <div className="section-sub">Pontuação acumulada · desempate por placares exatos e resultados corretos</div>
             <div className="table-wrap">
               <table className="dt">
-                <thead><tr><th>#</th><th>Participante</th><th className="r">Pontos</th><th className="r">Rodadas</th><th className="r">Média</th></tr></thead>
+                <thead><tr><th style={{width:40}}>#</th><th>Participante</th><th className="r">Pontos</th><th className="r">Exatos</th><th className="r">Corretos</th><th className="r">Rodadas</th></tr></thead>
                 <tbody>
-                  {sorted.map((d:any,i:number)=><tr key={d.name}>
-                    <td>{posIcon(i)}</td><td>{d.name}</td>
-                    <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:'var(--gold)'}}>{d.total}</td>
-                    <td className="r" style={{color:'var(--text-muted)'}}>{d.rodadas}</td>
-                    <td className="r" style={{color:'var(--text-muted)'}}>{d.rodadas>0?(d.total/d.rodadas).toFixed(1):'—'}</td>
-                  </tr>)}
+                  {sorted.map((d:any,i:number)=>{
+                    const prevTotal = i>0?sorted[i-1].total:null
+                    const tied = prevTotal===d.total && d.total > 0
+                    return <tr key={d.name} style={tied?{background:dm?'rgba(212,175,55,.04)':'rgba(212,175,55,.08)'}:{}}>
+                      <td>{posIcon(i)}</td>
+                      <td style={{whiteSpace:'nowrap'}}>{d.name}{tied&&<span style={{fontSize:10,color:C.gold,marginLeft:4}}>≈</span>}</td>
+                      <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold}}>{d.total}</td>
+                      <td className="r" style={{color:C.textMuted}}>{d.exact}</td>
+                      <td className="r" style={{color:C.textMuted}}>{d.correct}</td>
+                      <td className="r" style={{color:C.textMuted}}>{d.rodadas}</td>
+                    </tr>
+                  })}
                 </tbody>
               </table>
             </div>
           </div>}
 
+          {/* HISTÓRICO */}
+          {activeTab==='historico'&&<div>
+            <div className="section-title">Histórico de Rodadas</div>
+            <div className="section-sub">Pontuação por rodada finalizada</div>
+            {state.roundHistory.length===0&&<div style={{color:C.textMuted,fontSize:13,padding:'20px 0'}}>Nenhuma rodada finalizada ainda.</div>}
+            {[...state.roundHistory].reverse().map((r:any,ri:number)=>(
+              <div key={ri} className="a-card" style={{marginBottom:14}}>
+                <div style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold,letterSpacing:2,marginBottom:10}}>{r.roundName||'Rodada'}</div>
+                <div style={{background:C.bgRow,border:`1px solid ${C.border}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
+                  <table className="parcial-table">
+                    <thead>
+                      <tr>
+                        <th style={{width:32}}>#</th>
+                        <th>Participante</th>
+                        <th className="r">Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...PLAYERS].sort((a,b)=>(r.scores?.[b]||0)-(r.scores?.[a]||0)).map((p,i)=>{
+                        const pts=r.scores?.[p]??0
+                        return <tr key={p}>
+                          <td>{posIcon(i)}</td>
+                          <td style={{fontSize:13}}>{p}</td>
+                          <td className="r">
+                            {pts>0
+                              ? <span className="parcial-pts-val">{pts}</span>
+                              : <span style={{color:C.textSub,fontSize:12}}>—</span>
+                            }
+                          </td>
+                        </tr>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>}
+
           {/* ADMIN */}
-          {activeTab==='admin' && isAdmin && <div>
+          {activeTab==='admin'&&isAdmin&&<div>
             <div className="a-warn">⚠ Área restrita — alterações afetam todos os participantes.</div>
 
             <div style={{marginBottom:24}}>
@@ -669,26 +1005,46 @@ export default function Home() {
               {(adminBuf.matches||[]).map((m:any,idx:number)=>(
                 <div key={m.id} className="a-card">
                   <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10,flexWrap:'wrap'}}>
-                    <span style={{fontFamily:"'Bebas Neue'",fontSize:13,color:'var(--gold)',letterSpacing:1}}>JOGO {idx+1}</span>
+                    <span style={{fontFamily:"'Bebas Neue'",fontSize:13,color:C.gold,letterSpacing:1}}>JOGO {idx+1}</span>
                     <button className="rm-btn" onClick={()=>setAdminBuf((b:any)=>({...b,matches:b.matches.filter((x:any)=>x.id!==m.id)}))}>Remover</button>
                   </div>
                   <div className="a-row">
                     <span className="a-lbl">Casa:</span>
                     <input className="a-in" style={{width:50}} value={m.homeFlag} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,homeFlag:e.target.value}:x)}))}/>
                     <input className="a-in lg" value={m.home} placeholder="País Casa" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,home:e.target.value}:x)}))}/>
+                  </div>
+                  <div className="a-row">
                     <span className="a-lbl">Fora:</span>
                     <input className="a-in" style={{width:50}} value={m.awayFlag} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,awayFlag:e.target.value}:x)}))}/>
                     <input className="a-in lg" value={m.away} placeholder="País Fora" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,away:e.target.value}:x)}))}/>
                   </div>
                   <div className="a-row">
+                    <span className="a-lbl">Data:</span>
+                    <input className="a-in md" value={m.date||''} placeholder="DD/MM" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,date:e.target.value}:x)}))}/>
                     <span className="a-lbl">Horário:</span>
-                    <input className="a-in md" value={m.time} placeholder="19:00" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,time:e.target.value}:x)}))}/>
-                    <span className="a-lbl">Eliminatório:</span>
-                    <label className="toggle"><input type="checkbox" checked={m.isElim} onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,isElim:e.target.checked}:x)}))}/><span className="tsl"/></label>
+                    <input className="a-in md" value={m.time||''} placeholder="19:00" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,time:e.target.value}:x)}))}/>
+                  </div>
+                  <div className="a-row">
+                    <span className="a-lbl">Travado:</span>
+                    <label className="toggle"><input type="checkbox" checked={m.locked||false} onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,locked:e.target.checked}:x)}))}/><span className="tsl"/></label>
+                    <span style={{fontSize:12,color:m.locked?C.red:C.textMuted}}>{m.locked?'🔒 Travado manualmente':'Automático'}</span>
+                  </div>
+                  <div className="extras-admin">
+                    <div className="extras-admin-title">Extras</div>
+                    <div className="extras-checks">
+                      <label className="extra-check">
+                        <input type="checkbox" checked={m.hasQuemAvanca||false} onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,hasQuemAvanca:e.target.checked}:x)}))}/>
+                        🏴 Quem Avança?
+                      </label>
+                      <label className="extra-check">
+                        <input type="checkbox" checked={m.hasPenaltis||false} onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,hasPenaltis:e.target.checked}:x)}))}/>
+                        ⚽ Pênaltis?
+                      </label>
+                    </div>
                   </div>
                 </div>
               ))}
-              <button className="add-btn" onClick={()=>setAdminBuf((b:any)=>({...b,matches:[...(b.matches||[]),{id:'m'+Date.now(),home:'',away:'',homeFlag:'',awayFlag:'',time:'',isElim:false}]}))}>+ Adicionar Jogo</button>
+              <button className="add-btn" onClick={()=>setAdminBuf((b:any)=>({...b,matches:[...(b.matches||[]),{id:'m'+Date.now(),home:'',away:'',homeFlag:'',awayFlag:'',date:'',time:'',locked:false,hasQuemAvanca:false,hasPenaltis:false}]}))}>+ Adicionar Jogo</button>
               <div style={{marginTop:14,display:'flex',gap:10,flexWrap:'wrap'}}>
                 <button className="btn-sm btn-gold" onClick={saveRoundConfig}>💾 Salvar Rodada</button>
                 <button className="btn-sm btn-green" onClick={finalizeRound}>✔ Finalizar Rodada</button>
@@ -700,18 +1056,30 @@ export default function Home() {
               <div className="section-title">Resultado & Correção</div>
               <div className="a-card">
                 {state.round.matches.map((m:any)=>(
-                  <div key={m.id} className="a-row" style={{marginBottom:6}}>
-                    <span style={{fontSize:13,minWidth:160}}>{m.home||'?'} × {m.away||'?'}</span>
-                    <input className="a-in sm" type="number" inputMode="numeric" min={0} value={resultInputs[m.id]?.h||''} placeholder="0"
-                      onChange={e=>setResultInputs((r:any)=>({...r,[m.id]:{...r[m.id],h:e.target.value}}))}/>
-                    <span style={{color:'var(--text-muted)'}}>×</span>
-                    <input className="a-in sm" type="number" inputMode="numeric" min={0} value={resultInputs[m.id]?.a||''} placeholder="0"
-                      onChange={e=>setResultInputs((r:any)=>({...r,[m.id]:{...r[m.id],a:e.target.value}}))}/>
+                  <div key={m.id} style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.borderFaint}`}}>
+                    <div style={{fontSize:13,fontWeight:600,marginBottom:8,color:C.text}}>{m.home||'?'} × {m.away||'?'}</div>
+                    <div className="a-row" style={{marginBottom:6}}>
+                      <span className="a-lbl">Placar:</span>
+                      <input className="a-in sm" type="number" inputMode="numeric" min={0} value={resultInputs[m.id]?.h||''} placeholder="0" onChange={e=>setResultInputs((r:any)=>({...r,[m.id]:{...r[m.id],h:e.target.value}}))}/>
+                      <span style={{color:C.textMuted}}>×</span>
+                      <input className="a-in sm" type="number" inputMode="numeric" min={0} value={resultInputs[m.id]?.a||''} placeholder="0" onChange={e=>setResultInputs((r:any)=>({...r,[m.id]:{...r[m.id],a:e.target.value}}))}/>
+                    </div>
+                    {m.hasQuemAvanca&&<div className="a-row" style={{marginBottom:4}}>
+                      <span className="a-lbl">Avançou:</span>
+                      <select className="a-sel" value={extraResults[m.id]?.quemAvanca||''} onChange={e=>setExtraResults((er:any)=>({...er,[m.id]:{...er[m.id],quemAvanca:e.target.value}}))}>
+                        <option value="">Selecione...</option>
+                        <option value={m.home}>{m.home}</option>
+                        <option value={m.away}>{m.away}</option>
+                      </select>
+                    </div>}
+                    {m.hasPenaltis&&<div className="a-row">
+                      <span className="a-lbl">Pênaltis:</span>
+                      <label className="toggle"><input type="checkbox" checked={extraResults[m.id]?.foiPenaltis||false} onChange={e=>setExtraResults((er:any)=>({...er,[m.id]:{...er[m.id],foiPenaltis:e.target.checked}}))}/><span className="tsl"/></label>
+                      <span style={{fontSize:12}}>{extraResults[m.id]?.foiPenaltis?'Sim':'Não'}</span>
+                    </div>}
                   </div>
                 ))}
-                <div style={{marginTop:10}}>
-                  <button className="btn-sm btn-gold" onClick={applyCorrection}>⚡ Calcular Pontos Automaticamente</button>
-                </div>
+                <button className="btn-sm btn-gold" onClick={applyCorrection}>⚡ Calcular Pontos Automaticamente</button>
               </div>
               {PLAYERS.map(p=>{
                 const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
@@ -719,20 +1087,19 @@ export default function Home() {
                 return <div key={p} className="corr-p">
                   <div className="corr-h" onClick={()=>setCorrOpen((o:any)=>({...o,[pkey]:!o[pkey]}))}>
                     <span className="corr-n">{p}</span>
-                    <span className="corr-pts">{roundPts} pts <span style={{fontSize:13,color:'var(--text-muted)'}}>{state.totalPoints[p]||0} total</span></span>
+                    <span className="corr-pts">{roundPts} pts <span style={{fontSize:13,color:C.textMuted}}>{state.totalPoints[p]||0} total</span></span>
                   </div>
-                  {corrOpen[pkey] && <div className="corr-b">
+                  {corrOpen[pkey]&&<div className="corr-b">
                     {state.round.matches.map((m:any)=>{
                       const pal=state.palpites[p]?.[m.id]; const res=state.results[m.id]; const pts=state.correctedScores[p]?.[m.id]
                       const key=`${p}-${m.id}`
                       return <div key={m.id} className="corr-r">
-                        <span style={{minWidth:130,color:'var(--text-muted)',fontSize:12}}>{m.home} x {m.away}</span>
-                        <span>Palpite: <b>{pal&&pal.h!==''?`${pal.h}×${pal.a}`:<span style={{color:'rgba(255,255,255,.2)'}}>NP</span>}</b></span>
-                        <span>Resultado: <b style={{color:'var(--gold)'}}>{res&&res.h!==''?`${res.h}×${res.a}`:'—'}</b></span>
-                        {pts!==undefined&&<span className={`pts-badge pts-${pts}`}>{pts} pt{pts!==1?'s':''}</span>}
+                        <span style={{minWidth:120,color:C.textMuted,fontSize:12}}>{m.home} x {m.away}</span>
+                        <span style={{fontSize:12}}>Palpite: <b>{pal&&pal.h!==''?`${pal.h}×${pal.a}`:<span style={{color:C.textSub}}>NP</span>}</b></span>
+                        <span style={{fontSize:12}}>Result: <b style={{color:C.gold}}>{res&&res.h!==''?`${res.h}×${res.a}`:'—'}</b></span>
+                        {pts!==undefined&&<span className={`pts-badge pts-${Math.min(pts,5)}`}>{pts}pt</span>}
                         <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                          <input className="a-in sm" type="number" inputMode="numeric" min={0} value={manualPts[key]??pts??''} placeholder="—"
-                            onChange={e=>setManualPts((mp:any)=>({...mp,[key]:e.target.value}))}/>
+                          <input className="a-in sm" type="number" inputMode="numeric" min={0} value={manualPts[key]??pts??''} placeholder="—" onChange={e=>setManualPts((mp:any)=>({...mp,[key]:e.target.value}))}/>
                           <button className="btn-sm btn-outline" style={{padding:'5px 10px',fontSize:11}} onClick={()=>applyManualPts(p,m.id)}>Ok</button>
                         </div>
                       </div>
@@ -748,11 +1115,7 @@ export default function Home() {
                 <div key={ph.id} className="a-card">
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,flexWrap:'wrap',gap:8}}>
                     <input className="a-in md" value={ph.name} onChange={e=>setScoringPhases(ps=>ps.map((p:any,i)=>i===phIdx?{...p,name:e.target.value}:p))} placeholder="Nome da fase"/>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
-                      <span style={{fontSize:12,color:'var(--text-muted)'}}>Tem classificado:</span>
-                      <label className="toggle"><input type="checkbox" checked={ph.hasClassify} onChange={e=>setScoringPhases(ps=>ps.map((p:any,i)=>i===phIdx?{...p,hasClassify:e.target.checked}:p))}/><span className="tsl"/></label>
-                      <button className="rm-btn" onClick={()=>setScoringPhases(ps=>ps.filter((_:any,i)=>i!==phIdx))}>Remover</button>
-                    </div>
+                    <button className="rm-btn" onClick={()=>setScoringPhases(ps=>ps.filter((_:any,i)=>i!==phIdx))}>Remover</button>
                   </div>
                   {ph.rules.map((r:any,ri:number)=>(
                     <div key={ri} className="a-row" style={{marginBottom:6}}>
@@ -764,7 +1127,20 @@ export default function Home() {
                   <button className="add-btn" style={{marginTop:6}} onClick={()=>setScoringPhases(ps=>ps.map((p:any,i)=>i===phIdx?{...p,rules:[...p.rules,{desc:'',pts:0}]}:p))}>+ Regra</button>
                 </div>
               ))}
-              <button className="add-btn" onClick={()=>setScoringPhases(ps=>[...ps,{id:'ph'+Date.now(),name:'Nova Fase',rules:[{desc:'Acertar o vencedor',pts:1}],hasClassify:false}])}>+ Adicionar Fase</button>
+              <button className="add-btn" onClick={()=>setScoringPhases(ps=>[...ps,{id:'ph'+Date.now(),name:'Nova Fase',rules:[{desc:'Acertar o vencedor',pts:1}]}])}>+ Adicionar Fase</button>
+              <div className="a-card" style={{marginTop:12}}>
+                <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,fontWeight:600,color:C.gold,letterSpacing:1,marginBottom:10}}>Multiplicadores Extras</div>
+                <div className="a-row">
+                  <span className="a-lbl">Quem Avança (base):</span>
+                  <input className="a-in sm" type="number" min={0} value={multipliersBuf.quemAvanca??2} onChange={e=>setMultipliersBuf((b:any)=>({...b,quemAvanca:parseInt(e.target.value)||0}))}/>
+                  <span style={{fontSize:11,color:C.textMuted}}>× mult. da fase</span>
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Bônus Pênaltis:</span>
+                  <input className="a-in sm" type="number" min={0} value={multipliersBuf.penaltisBonus??1} onChange={e=>setMultipliersBuf((b:any)=>({...b,penaltisBonus:parseInt(e.target.value)||0}))}/>
+                  <span style={{fontSize:11,color:C.textMuted}}>pts fixos</span>
+                </div>
+              </div>
               <div style={{marginTop:12}}><button className="btn-sm btn-gold" onClick={saveScoringConfig}>💾 Salvar Pontuação</button></div>
             </div>
 
@@ -780,23 +1156,29 @@ export default function Home() {
                 <div className="a-row"><span className="a-lbl">Foto URL:</span>
                   <input className="a-in lg" value={shameUrl} onChange={e=>setShameUrl(e.target.value)} placeholder="https://..."/>
                 </div>
-                <div className="a-row"><span className="a-lbl">Texto:</span>
-                  <textarea className="a-in lg" value={shameText} onChange={e=>setShameText(e.target.value)} placeholder="Ex: Nem o Brasileirão esse cara acerta... 💀" style={{resize:'vertical',minHeight:60,lineHeight:1.4}}/>
-                </div>
                 <div style={{marginTop:10,display:'flex',gap:8}}>
                   <button className="btn-sm btn-gold" onClick={saveShame}>💾 Salvar</button>
-                  <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('');setShameText('')}}>Limpar</button>
+                  <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('')}}>Limpar</button>
                 </div>
               </div>
             </div>
 
             <div style={{marginBottom:24}}>
-              <div className="section-title">Segurança</div>
+              <div className="section-title">Dados & Segurança</div>
+              <div className="reset-box">
+                <div className="reset-title">🗑 Zerar Todos os Dados</div>
+                <div className="reset-desc">
+                  Apaga palpites, pontuações, resultados e histórico de rodadas.<br/>
+                  Mantém: configuração de pontuação, senha admin e lista de jogadores.
+                </div>
+                <button className="btn-sm btn-danger" onClick={()=>setShowResetModal(true)}>⚠ Zerar Tudo</button>
+              </div>
               <div className="a-card">
+                <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,fontWeight:600,color:C.gold,letterSpacing:1,marginBottom:10}}>Alterar Senha Admin</div>
                 <div className="a-row"><span className="a-lbl">Nova Senha:</span><input className="a-in md" type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="Nova senha admin"/></div>
                 <div className="a-row"><span className="a-lbl">Senha Master:</span><input className="a-in md" type="password" value={masterConf} onChange={e=>setMasterConf(e.target.value)} placeholder="Confirmar com master"/></div>
-                <div style={{marginTop:10}}><button className="btn-sm btn-danger" onClick={changeAdminPass}>🔑 Alterar Senha Admin</button></div>
-                <div style={{marginTop:8,fontSize:11,color:'var(--text-muted)'}}>A senha master nunca muda.</div>
+                <div style={{marginTop:10}}><button className="btn-sm btn-danger" onClick={changeAdminPass}>🔑 Alterar Senha</button></div>
+                <div style={{marginTop:8,fontSize:11,color:C.textMuted}}>A senha master nunca muda.</div>
               </div>
             </div>
           </div>}

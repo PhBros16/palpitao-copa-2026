@@ -38,7 +38,7 @@ function defaultState(): any {
     palpites:{}, palpiteTimes:{}, results:{},
     correctedScores:{}, totalPoints:{},
     roundHistory:[],
-    shame:{ player:'', photoUrl:'' },
+    shame:{ player:'', photoUrl:'', text:'' },
     roundFinalized:false,
     scoringPhases:defaultScoringPhases(),
     multipliers:defaultMultipliers(),
@@ -134,6 +134,7 @@ export default function Home() {
   const [multipliersBuf, setMultipliersBuf] = useState<any>({})
   const [shamePlayer, setShamePlayer] = useState('')
   const [shameUrl, setShameUrl] = useState('')
+  const [shameText, setShameText] = useState('')
   const [newPass, setNewPass] = useState('')
   const [masterConf, setMasterConf] = useState('')
   const notifTimer = useRef<any>(null)
@@ -153,7 +154,7 @@ export default function Home() {
       const json = await res.json()
       const s = json.state || defaultState()
       if(!s.adminPass) s.adminPass='Copa2026!'
-      if(!s.shame) s.shame={player:'',photoUrl:''}
+      if(!s.shame) s.shame={player:'',photoUrl:'',text:''}
       if(s.palpitesOpen===undefined) s.palpitesOpen=true
       if(!s.roundFinalized) s.roundFinalized=false
       if(!s.scoringPhases) s.scoringPhases=defaultScoringPhases()
@@ -209,7 +210,7 @@ export default function Home() {
       setAdminBuf({ name:state.round.name, phase:state.round.phase, open:state.palpitesOpen, matches:JSON.parse(JSON.stringify(state.round.matches)) })
       setScoringPhases(JSON.parse(JSON.stringify(state.scoringPhases)))
       setMultipliersBuf(JSON.parse(JSON.stringify(state.multipliers||defaultMultipliers())))
-      setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl)
+      setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl); setShameText(state.shame.text||'')
       const ri:any={}; const er:any={}
       state.round.matches.forEach((m:any)=>{
         ri[m.id]=state.results[m.id]||{h:'',a:''}
@@ -374,7 +375,7 @@ export default function Home() {
 
   async function saveShame() {
     if(!state) return
-    const newState=JSON.parse(JSON.stringify(state)); newState.shame={player:shamePlayer,photoUrl:shameUrl}
+    const newState=JSON.parse(JSON.stringify(state)); newState.shame={player:shamePlayer,photoUrl:shameUrl,text:shameText}
     await saveState(newState, authPassword); showNotif('Salvo!')
   }
 
@@ -738,8 +739,9 @@ export default function Home() {
                   <div className="shame-ttl">🤦 Pior Palpiteiro</div>
                   <div className="shame-sub">Administração atualiza após cada rodada</div>
                   {state.shame.player&&<>
-                    {state.shame.photoUrl&&<img src={state.shame.photoUrl} alt="" style={{maxWidth:180,borderRadius:8,border:'2px solid rgba(192,57,43,.5)',display:'block',margin:'0 auto 10px'}}/>}
+                    {state.shame.photoUrl&&<img src={state.shame.photoUrl} alt="" style={{width:'100%',maxWidth:320,borderRadius:8,border:'2px solid rgba(192,57,43,.5)',display:'block',margin:'0 auto 10px',objectFit:'cover'}}/>}
                     <div style={{fontFamily:"'Bebas Neue'",fontSize:16,color:'#e74c3c',letterSpacing:2}}>😂 {state.shame.player}</div>
+                    {state.shame.text&&<div style={{fontStyle:'italic',fontSize:13,color:'rgba(255,180,160,.85)',marginTop:6,lineHeight:1.4}}>{state.shame.text}</div>}
                   </>}
                 </div>
                 <div className="card">
@@ -1156,9 +1158,19 @@ export default function Home() {
                 <div className="a-row"><span className="a-lbl">Foto URL:</span>
                   <input className="a-in lg" value={shameUrl} onChange={e=>setShameUrl(e.target.value)} placeholder="https://..."/>
                 </div>
+                <div className="a-row" style={{alignItems:'flex-start'}}>
+                  <span className="a-lbl" style={{paddingTop:6}}>Texto:</span>
+                  <textarea
+                    value={shameText}
+                    onChange={e=>setShameText(e.target.value)}
+                    placeholder="Mensagem opcional abaixo do nome (ex: mandou 6x0 no Brasil...)"
+                    rows={3}
+                    style={{flex:1,background:C.bgInput,border:`1px solid ${dm?'rgba(212,175,55,.25)':C.border}`,color:C.text,fontSize:13,padding:'7px 12px',borderRadius:5,outline:'none',resize:'vertical',fontFamily:'inherit',lineHeight:1.4}}
+                  />
+                </div>
                 <div style={{marginTop:10,display:'flex',gap:8}}>
                   <button className="btn-sm btn-gold" onClick={saveShame}>💾 Salvar</button>
-                  <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('')}}>Limpar</button>
+                  <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('');setShameText('')}}>Limpar</button>
                 </div>
               </div>
             </div>

@@ -1,4 +1,3 @@
-cat > /home/claude/page.tsx << 'ENDOFFILE'
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
 

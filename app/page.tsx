@@ -1168,7 +1168,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }
       </div>
 
       {/* PONTUAÇÃO */}
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>⚽ Pontuação</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>{'⚽ Pontuação'}</div>
 
       <GuiaItem title="Como funciona a pontuação?" icon="🎯" defaultOpen={true}>
         <div style={guideTextStyle}>
@@ -1211,12 +1211,12 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }
       </GuiaItem>
 
       {/* REGRAS */}
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>📋 Regras do Palpite</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>{'📋 Regras do Palpite'}</div>
 
       <GuiaItem title="Como e quando palpitar?" icon="✏️" defaultOpen={true}>
         <div style={guideTextStyle}>
           <GuiaStep n={1} text="Entre no app e selecione seu nome na tela inicial."/>
-          <GuiaStep n={2} text='Vá até a aba "Palpites" e preencha o placar que você acredita que vai acontecer em cada jogo."/>
+          <GuiaStep n={2} text='Vá até a aba "Palpites" e preencha o placar que você acredita que vai acontecer em cada jogo.'/>
           <GuiaStep n={3} text="Clique em Salvar Palpites. Você pode editar quantas vezes quiser até o prazo!"/>
         </div>
         <div style={guideTipStyle}>
@@ -1246,7 +1246,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }
       </GuiaItem>
 
       {/* INSTALAR */}
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>📱 Instalar no Celular</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>{'📱 Instalar no Celular'}</div>
 
       <GuiaItem title="Adicionar à tela inicial (app sem instalar)" icon="📲" defaultOpen={true}>
         <p style={{...guideTextStyle,marginBottom:14,color:C.textMuted}}>
@@ -1282,7 +1282,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }
       </GuiaItem>
 
       {/* NOTIFICAÇÕES */}
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>🔔 Notificações</div>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>{'🔔 Notificações'}</div>
 
       <GuiaItem title="Como ativar notificações?" icon="🔔">
         <div style={guideTextStyle}>

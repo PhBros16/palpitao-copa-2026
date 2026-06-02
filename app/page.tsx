@@ -1058,7 +1058,7 @@ export default function Home() {
           </div>}
 
           {/* GUIA */}
-          {activeTab==='guia'&&<GuiaTab C={C} dm={dm} state={state} guideTextStyle={guideTextStyle} guideTipStyle={guideTipStyle} guideHighlight={guideHighlight}/>}
+          {activeTab==='guia'&&<GuiaTab C={C} dm={dm} state={state} guideTextStyle={guideTextStyle} guideTipStyle={guideTipStyle} guideHighlight={guideHighlight} requestPushPermission={requestPushPermission} pushStatus={pushStatus}/>}
 
           {/* ADMIN */}
           {activeTab==='admin'&&isAdmin&&<div>
@@ -1335,7 +1335,7 @@ export default function Home() {
 }
 
 // ── ABA GUIA (componente separado para não poluir o Home) ───────────────────
-function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }: any) {
+function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, requestPushPermission, pushStatus }: any) {
   const [osTab, setOsTab] = useState<'android'|'iphone'>('android')
 
   return (

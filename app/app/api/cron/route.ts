@@ -28,73 +28,78 @@ async function sendPush(title: string, message: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // Segurança: só aceita chamadas do Vercel Cron
   const auth = req.headers.get('authorization')
-  if(auth !== `Bearer ${CRON_SECRET}`) {
+  if (auth !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
   try {
-    // Busca o estado atual
+    // Busca estado atual
     const { data, error } = await supabase
       .from('app_state')
       .select('data')
       .eq('key', 'main')
       .single()
 
-    if(error || !data) return NextResponse.json({ ok: true, msg: 'sem estado' })
+    if (error || !data) return NextResponse.json({ ok: true, msg: 'sem estado' })
 
     const state = data.data
     const matches: any[] = state?.round?.matches ?? []
     const roundName: string = state?.round?.name ?? 'da rodada'
 
-    if(!matches.length || !state?.palpitesOpen) {
+    if (!matches.length || !state?.palpitesOpen) {
       return NextResponse.json({ ok: true, msg: 'sem jogos ou palpites fechados' })
     }
 
-    // Hora atual em Brasília (UTC-3)
+    // Data de hoje em Brasília (UTC-3)
     const now = new Date()
-    const brasiliaOffset = -3 * 60
-    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes()
-    const brasiliaMinutes = ((utcMinutes + brasiliaOffset) + 1440) % 1440
-    const brasiliaHour = Math.floor(brasiliaMinutes / 60)
-    const brasiliaMin = brasiliaMinutes % 60
-    const brasiliaDay = now.getUTCDate() // simplificado
+    const brasilia = new Date(now.getTime() - 3 * 60 * 60 * 1000)
+    const dia = String(brasilia.getUTCDate()).padStart(2, '0')
+    const mes = String(brasilia.getUTCMonth() + 1).padStart(2, '0')
+    const hoje = `${dia}/${mes}`
 
-    // Agrupa jogos por dia e pega o primeiro de cada dia
-    const jogosPorDia: Record<string, any[]> = {}
-    for(const m of matches) {
-      const dia = m.date || 'sem_data'
-      if(!jogosPorDia[dia]) jogosPorDia[dia] = []
-      jogosPorDia[dia].push(m)
+    // Verifica se tem jogo hoje
+    const jogosHoje = matches.filter((m: any) => m.date === hoje)
+    if (!jogosHoje.length) {
+      return NextResponse.json({ ok: true, msg: 'sem jogos hoje' })
     }
 
-    let notified = false
+    // Verifica se já notificou hoje
+    const { data: notifData } = await supabase
+      .from('app_state')
+      .select('data')
+      .eq('key', 'last_notif_date')
+      .single()
 
-    for(const [dia, jogos] of Object.entries(jogosPorDia)) {
-      // Ordena por horário e pega o primeiro
-      const sorted = jogos.sort((a: any, b: any) => {
-        const [ah, am] = (a.time || '00:00').split(':').map(Number)
-        const [bh, bm] = (b.time || '00:00').split(':').map(Number)
-        return (ah * 60 + am) - (bh * 60 + bm)
-      })
-
-      const primeiro = sorted[0]
-      if(!primeiro?.time) continue
-
-      const [jogoH, jogoM] = primeiro.time.split(':').map(Number)
-
-      // Verifica se é exatamente agora (janela de 1 minuto)
-      if(jogoH === brasiliaHour && jogoM === brasiliaMin) {
-        const msg = `⚽ ${roundName} começou! ${primeiro.home} x ${primeiro.away} já está rolando. Já palpitou hoje?`
-        await sendPush('🟢 A Rodada começou!', msg)
-        notified = true
-        console.log(`Push enviado: ${msg}`)
-      }
+    if (notifData?.data === hoje) {
+      return NextResponse.json({ ok: true, msg: 'já notificou hoje' })
     }
 
-    return NextResponse.json({ ok: true, notified })
-  } catch(err) {
+    // Pega o primeiro jogo do dia para montar a mensagem
+    const sorted = jogosHoje.sort((a: any, b: any) => {
+      const [ah, am] = (a.time || '00:00').split(':').map(Number)
+      const [bh, bm] = (b.time || '00:00').split(':').map(Number)
+      return (ah * 60 + am) - (bh * 60 + bm)
+    })
+    const primeiro = sorted[0]
+    const totalJogos = jogosHoje.length
+
+    const titulo = '⚽ Tem jogo hoje no Palpitão!'
+    const mensagem = totalJogos === 1
+      ? `${roundName}: ${primeiro.home} x ${primeiro.away} às ${primeiro.time}. Corre lá palpitar! 🟢`
+      : `${roundName}: ${totalJogos} jogos hoje, começando com ${primeiro.home} x ${primeiro.away} às ${primeiro.time}. Corre lá! 🟢`
+
+    await sendPush(titulo, mensagem)
+
+    // Registra que já notificou hoje
+    await supabase
+      .from('app_state')
+      .upsert({ key: 'last_notif_date', data: hoje })
+
+    console.log(`Push enviado: ${mensagem}`)
+    return NextResponse.json({ ok: true, notified: true, hoje })
+
+  } catch (err) {
     console.error('Cron error:', err)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }

@@ -109,6 +109,34 @@ function posIcon(i: number) {
   return <span className={`pos-badge ${cls}`}>{i+1}</span>
 }
 
+// ── Guia accordion item ──────────────────────────────────────────────────────
+function GuiaItem({ title, icon, children, defaultOpen=false }: any) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{border:'1px solid rgba(212,175,55,0.25)',borderRadius:8,marginBottom:10,overflow:'hidden'}}>
+      <button
+        onClick={()=>setOpen(o=>!o)}
+        style={{width:'100%',background:'rgba(0,40,20,0.6)',border:'none',padding:'14px 18px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',gap:10}}
+      >
+        <span style={{display:'flex',alignItems:'center',gap:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:600,letterSpacing:1,color:'#D4AF37'}}>
+          <span style={{fontSize:18}}>{icon}</span>{title}
+        </span>
+        <span style={{color:'#D4AF37',fontSize:16,transition:'transform .2s',display:'inline-block',transform:open?'rotate(180deg)':'rotate(0deg)'}}>▾</span>
+      </button>
+      {open && <div style={{padding:'16px 18px',background:'rgba(0,20,10,0.5)',borderTop:'1px solid rgba(212,175,55,0.15)'}}>{children}</div>}
+    </div>
+  )
+}
+
+function GuiaStep({ n, text }: {n:number, text:string}) {
+  return (
+    <div style={{display:'flex',gap:12,alignItems:'flex-start',marginBottom:10}}>
+      <span style={{background:'#D4AF37',color:'#001a0a',borderRadius:'50%',width:24,height:24,display:'inline-flex',alignItems:'center',justifyContent:'center',fontFamily:"'Bebas Neue'",fontSize:13,flexShrink:0}}>{n}</span>
+      <span style={{fontSize:13,lineHeight:1.6,color:'#FAFAFA'}}>{text}</span>
+    </div>
+  )
+}
+
 export default function Home() {
   const [state, setState] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -228,7 +256,6 @@ export default function Home() {
 
   function getMultiplier(s: any) { return PHASE_MULTIPLIERS[s.round.phase]??1 }
 
-  // PARCIAL: ordena por pts da rodada, depois total
   function parcialData(s: any) {
     return PLAYERS.map(p=>({
       name: p,
@@ -361,8 +388,7 @@ export default function Home() {
     fresh.scoringPhases = state.scoringPhases
     fresh.multipliers = state.multipliers
     await saveState(fresh, authPassword)
-    setShowResetModal(false)
-    setResetConfirm('')
+    setShowResetModal(false); setResetConfirm('')
     showNotif('Dados zerados com sucesso!', 'error')
   }
 
@@ -375,7 +401,8 @@ export default function Home() {
 
   async function saveShame() {
     if(!state) return
-    const newState=JSON.parse(JSON.stringify(state)); newState.shame={player:shamePlayer,photoUrl:shameUrl,text:shameText}
+    const newState=JSON.parse(JSON.stringify(state))
+    newState.shame={player:shamePlayer,photoUrl:shameUrl,text:shameText}
     await saveState(newState, authPassword); showNotif('Salvo!')
   }
 
@@ -405,8 +432,7 @@ export default function Home() {
     text:'#FAFAFA', textMuted:'#B0A080', textSub:'rgba(255,255,255,0.2)',
     gold:'#D4AF37', goldLight:'#F0D060', goldDark:'#A07820',
     red:'#C0392B', green:'#00A651',
-    shadow:'0 2px 16px rgba(0,0,0,0.6)',
-    headerBg:'transparent',
+    shadow:'0 2px 16px rgba(0,0,0,0.6)', headerBg:'transparent',
   } : {
     bg:'#f0f4f0', bgPanel:'rgba(255,255,255,0.95)', bgCard:'rgba(255,255,255,0.9)',
     bgRow:'rgba(240,248,240,0.8)', bgInput:'rgba(230,245,230,0.9)', bgStat:'rgba(255,255,255,0.9)',
@@ -416,9 +442,12 @@ export default function Home() {
     text:'#0a1a0a', textMuted:'#4a6a4a', textSub:'rgba(0,0,0,0.2)',
     gold:'#8a6800', goldLight:'#b08800', goldDark:'#6a5000',
     red:'#c0392b', green:'#007a30',
-    shadow:'0 2px 16px rgba(0,0,0,0.12)',
-    headerBg:'rgba(0,60,20,0.95)',
+    shadow:'0 2px 16px rgba(0,0,0,0.12)', headerBg:'rgba(0,60,20,0.95)',
   }
+
+  const guideTextStyle = {fontSize:13,lineHeight:1.7,color:C.text}
+  const guideTipStyle = {background:dm?'rgba(212,175,55,0.08)':'rgba(212,175,55,0.12)',border:`1px solid rgba(212,175,55,0.25)`,borderRadius:6,padding:'10px 14px',fontSize:12,color:C.textMuted,marginTop:10}
+  const guideHighlight = {color:C.gold,fontWeight:600}
 
   return (
     <>
@@ -431,7 +460,7 @@ export default function Home() {
           --red:${C.red};--green-bright:${C.green};--radius:8px;
         }
         *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-        button,input,select{touch-action:manipulation;-webkit-appearance:none;appearance:none;font-family:inherit;}
+        button,input,select,textarea{touch-action:manipulation;-webkit-appearance:none;appearance:none;font-family:inherit;}
         html{overflow-x:hidden;}
         body{font-family:'Barlow',sans-serif;background:${C.bg};color:${C.text};min-height:100vh;overflow-x:hidden;max-width:100%;transition:background .3s,color .3s;}
         ${dm?`body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 20%,rgba(0,100,50,.25) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(0,40,100,.2) 0%,transparent 50%);pointer-events:none;z-index:0;}
@@ -560,7 +589,6 @@ export default function Home() {
         .rm-btn{background:transparent;border:1px solid rgba(192,57,43,.3);color:rgba(192,57,43,.7);font-size:11px;padding:4px 10px;border-radius:4px;cursor:pointer;}
         .notif-bar{position:fixed;top:0;left:0;right:0;background:var(--gold);color:#001a0a;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:2px;padding:4px;z-index:9998;}
         .notif-box{position:fixed;top:18px;right:18px;background:${dm?'rgba(0,30,15,.97)':C.bgPanel};border:1px solid var(--gold);border-radius:8px;padding:12px 18px;font-size:13px;color:${C.text};z-index:9999;max-width:260px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);}
-        /* PARCIAL TABLE */
         .parcial-table{width:100%;border-collapse:collapse;}
         .parcial-table th{background:${C.bgTableHead};color:${dm?C.gold:'#F0D060'};font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;padding:10px 12px;text-align:left;border-bottom:var(--border-gold);}
         .parcial-table th.r{text-align:right;}
@@ -570,13 +598,18 @@ export default function Home() {
         .parcial-pts-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);}
         .parcial-total-val{font-size:13px;color:var(--text-muted);}
         .pending-banner{background:${dm?'rgba(212,175,55,.1)':'rgba(212,175,55,.15)'};border:1px solid ${dm?'rgba(212,175,55,.4)':'rgba(212,175,55,.5)'};border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;cursor:pointer;}
-        .rules-box{background:${dm?'rgba(0,30,15,.7)':'rgba(240,250,240,.8)'};border:var(--border-gold);border-radius:var(--radius);padding:16px 18px;}
-        .rules-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--gold);margin-bottom:10px;}
-        .rules-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:13px;color:${C.text};}
-        .rules-bullet{color:var(--gold);font-weight:700;flex-shrink:0;}
         .reset-box{background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.3);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
         .reset-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#e74c3c;margin-bottom:6px;}
         .reset-desc{font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5;}
+        /* GUIA */
+        .guia-hero{background:${dm?'linear-gradient(135deg,rgba(0,60,30,.7),rgba(0,30,60,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,30,80,.05))'};border:var(--border-gold);border-radius:var(--radius);padding:20px;margin-bottom:20px;text-align:center;}
+        .guia-hero-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:4px;color:var(--gold);margin-bottom:6px;}
+        .guia-hero-sub{font-size:13px;color:var(--text-muted);line-height:1.5;}
+        .guia-section{margin-bottom:8px;}
+        .guia-divider{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--text-muted);padding:12px 0 6px;border-bottom:1px solid ${C.borderFaint};margin-bottom:8px;}
+        .os-tab-bar{display:flex;gap:8px;margin-bottom:14px;}
+        .os-tab{flex:1;padding:10px;border-radius:6px;border:1px solid ${C.borderFaint};background:transparent;color:${C.textMuted};font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all .2s;}
+        .os-tab.active{background:var(--gold);color:#001a0a;border-color:var(--gold);}
         @media(max-width:600px){
           .grid-4{grid-template-columns:1fr 1fr;gap:8px;}.stat-card{padding:12px 10px;}.stat-value{font-size:26px;}.stat-label{font-size:9px;}
           .grid-2{grid-template-columns:1fr;}
@@ -593,7 +626,6 @@ export default function Home() {
         {notif.type==='error'?'✕ ':'★ '}{notif.msg}
       </div>}
 
-      {/* Modal Admin Login */}
       {showModal && <div className="modal-overlay open">
         <div className="modal">
           <h3>Acesso Admin</h3>
@@ -610,19 +642,12 @@ export default function Home() {
         </div>
       </div>}
 
-      {/* Modal Reset */}
       {showResetModal && <div className="modal-overlay open">
         <div className="modal">
           <h3>⚠ Zerar Dados</h3>
           <p style={{color:'#e74c3c',fontSize:13,marginBottom:12}}>Isso apagará TODOS os palpites, pontuações, histórico e resultados. A ação é irreversível!</p>
           <p style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Digite <b style={{color:C.gold}}>ZERAR</b> para confirmar:</p>
-          <input
-            type="text"
-            value={resetConfirm}
-            onChange={e=>setResetConfirm(e.target.value)}
-            placeholder="ZERAR"
-            style={{letterSpacing:4,textTransform:'uppercase'}}
-          />
+          <input type="text" value={resetConfirm} onChange={e=>setResetConfirm(e.target.value)} placeholder="ZERAR" style={{letterSpacing:4,textTransform:'uppercase'}}/>
           <div className="modal-btns" style={{marginTop:8}}>
             <button className="btn-secondary" onClick={()=>{setShowResetModal(false);setResetConfirm('')}}>Cancelar</button>
             <button style={{flex:1,background:C.red,color:'white',border:'none',fontFamily:"'Barlow Condensed'",fontSize:14,fontWeight:700,letterSpacing:2,padding:12,borderRadius:6,cursor:'pointer'}} onClick={resetAll}>ZERAR TUDO</button>
@@ -637,9 +662,7 @@ export default function Home() {
           <div className="header-sub">USA · México · Canadá</div>
           <div className="trophy-line">🏆 <span style={{fontSize:11,color:dm?'#A07820':'rgba(255,255,255,0.7)',letterSpacing:1,whiteSpace:'nowrap'}}>48 SELEÇÕES · 3 PAÍSES SEDE · 1 CAMPEÃO</span> 🏆</div>
         </header>
-        <button className="theme-btn" onClick={()=>setDarkMode(!dm)} title={dm?'Modo claro':'Modo escuro'}>
-          {dm?'☀️':'🌙'}
-        </button>
+        <button className="theme-btn" onClick={()=>setDarkMode(!dm)}>{dm?'☀️':'🌙'}</button>
       </div>
 
       <div className="app">
@@ -667,9 +690,9 @@ export default function Home() {
           </div>
 
           <div className="tabs-nav">
-            {['home','palpites','geral','ranking','historico'].map(t=>(
+            {['home','palpites','geral','ranking','historico','guia'].map(t=>(
               <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)}>
-                {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':'📅 Histórico'}
+                {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
               </button>
             ))}
             {isAdmin && <button className={`tab-btn${activeTab==='admin'?' active':''}`} onClick={()=>setActiveTab('admin')}>⚙ Admin</button>}
@@ -706,14 +729,7 @@ export default function Home() {
                 </div>
                 <div style={{background:C.bgRow,border:`1px solid ${C.border}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
                   <table className="parcial-table">
-                    <thead>
-                      <tr>
-                        <th style={{width:32}}>#</th>
-                        <th>Participante</th>
-                        <th className="r">Pts Rod.</th>
-                        <th className="r">Total</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th style={{width:32}}>#</th><th>Participante</th><th className="r">Pts Rod.</th><th className="r">Total</th></tr></thead>
                     <tbody>
                       {parcial.map((d,i)=>(
                         <tr key={d.name}>
@@ -761,39 +777,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="grid-2" style={{marginBottom:20}}>
-              <div className="card">
-                <div className="section-title" style={{fontSize:15}}>Pontuação</div>
-                {state.scoringPhases.map((ph:any)=>(
-                  <div key={ph.id} style={{marginBottom:12}}>
-                    <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,fontWeight:600,color:C.gold,letterSpacing:1,marginBottom:5}}>{ph.name}</div>
-                    {ph.rules.map((r:any,i:number)=>(
-                      <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
-                        <span className={`pts-badge pts-${r.pts}`}>{r.pts} pt{r.pts!==1?'s':''}</span>
-                        <span style={{fontSize:13}}>{r.desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                <div style={{marginTop:8,paddingTop:8,borderTop:`1px solid ${C.borderFaint}`,display:'flex',gap:12,flexWrap:'wrap'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:C.textMuted}}>
-                    <span className="pts-badge pts-3">+{state.multipliers?.quemAvanca??2}×</span>
-                    <span>Quem avança</span>
-                  </div>
-                  <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:C.textMuted}}>
-                    <span className="pts-badge pts-1">+{state.multipliers?.penaltisBonus??1}</span>
-                    <span>Bônus pênaltis</span>
-                  </div>
-                </div>
-              </div>
-              <div className="rules-box">
-                <div className="rules-title">📋 Regras do Palpite</div>
-                <div className="rules-item"><span className="rules-bullet">→</span><span>Prazo: jogo 1 trava no apito inicial; demais jogos travam 30min antes</span></div>
-                <div className="rules-item"><span className="rules-bullet">→</span><span>Edições liberadas até o prazo de cada jogo</span></div>
-                <div className="rules-item"><span className="rules-bullet">→</span><span>Quem não enviar até o prazo recebe 0 pontos</span></div>
-                <div className="rules-item"><span className="rules-bullet">→</span><span>Desempate: 1º placares exatos · 2º resultados corretos · 3º pedra papel tesoura ✂️</span></div>
-              </div>
-            </div>
           </div>}
 
           {/* PALPITES */}
@@ -830,12 +813,8 @@ export default function Home() {
                 {m.hasQuemAvanca && (
                   <div className="extras-row">
                     <div className="extra-label">🏴 Quem avança?</div>
-                    <select
-                      className="classify-sel"
-                      disabled={locked}
-                      value={pal.quemAvanca||''}
-                      onChange={e=>setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],quemAvanca:e.target.value}}))}
-                    >
+                    <select className="classify-sel" disabled={locked} value={pal.quemAvanca||''}
+                      onChange={e=>setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],quemAvanca:e.target.value}}))}>
                       <option value="">Selecione...</option>
                       <option value={m.home}>{m.home}</option>
                       <option value={m.away}>{m.away}</option>
@@ -846,18 +825,10 @@ export default function Home() {
                   <div className="extras-row">
                     <div className="extra-label">⚽ Vai para pênaltis?</div>
                     <div className="penaltis-grp">
-                      <button
-                        type="button"
-                        className={`pen-btn${pal.penaltis==='sim'?' selected':''}`}
-                        disabled={locked}
-                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='sim'?'':' sim'}}))}
-                      >Sim</button>
-                      <button
-                        type="button"
-                        className={`pen-btn${pal.penaltis==='nao'?' selected':''}`}
-                        disabled={locked}
-                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='nao'?'':'nao'}}))}
-                      >Não</button>
+                      <button type="button" className={`pen-btn${pal.penaltis==='sim'?' selected':''}`} disabled={locked}
+                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='sim'?'':'sim'}}))}>Sim</button>
+                      <button type="button" className={`pen-btn${pal.penaltis==='nao'?' selected':''}`} disabled={locked}
+                        onClick={()=>!locked&&setLocalPalpites((prev:any)=>({...prev,[m.id]:{...prev[m.id],penaltis:pal.penaltis==='nao'?'':'nao'}}))}>Não</button>
                     </div>
                   </div>
                 )}
@@ -950,25 +921,14 @@ export default function Home() {
                 <div style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold,letterSpacing:2,marginBottom:10}}>{r.roundName||'Rodada'}</div>
                 <div style={{background:C.bgRow,border:`1px solid ${C.border}`,borderRadius:'var(--radius)',overflow:'hidden'}}>
                   <table className="parcial-table">
-                    <thead>
-                      <tr>
-                        <th style={{width:32}}>#</th>
-                        <th>Participante</th>
-                        <th className="r">Pts</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th style={{width:32}}>#</th><th>Participante</th><th className="r">Pts</th></tr></thead>
                     <tbody>
                       {[...PLAYERS].sort((a,b)=>(r.scores?.[b]||0)-(r.scores?.[a]||0)).map((p,i)=>{
                         const pts=r.scores?.[p]??0
                         return <tr key={p}>
                           <td>{posIcon(i)}</td>
                           <td style={{fontSize:13}}>{p}</td>
-                          <td className="r">
-                            {pts>0
-                              ? <span className="parcial-pts-val">{pts}</span>
-                              : <span style={{color:C.textSub,fontSize:12}}>—</span>
-                            }
-                          </td>
+                          <td className="r">{pts>0?<span className="parcial-pts-val">{pts}</span>:<span style={{color:C.textSub,fontSize:12}}>—</span>}</td>
                         </tr>
                       })}
                     </tbody>
@@ -978,10 +938,12 @@ export default function Home() {
             ))}
           </div>}
 
+          {/* GUIA */}
+          {activeTab==='guia'&&<GuiaTab C={C} dm={dm} state={state} guideTextStyle={guideTextStyle} guideTipStyle={guideTipStyle} guideHighlight={guideHighlight}/>}
+
           {/* ADMIN */}
           {activeTab==='admin'&&isAdmin&&<div>
             <div className="a-warn">⚠ Área restrita — alterações afetam todos os participantes.</div>
-
             <div style={{marginBottom:24}}>
               <div className="section-title">Configuração da Rodada</div>
               <div className="a-card">
@@ -1160,13 +1122,9 @@ export default function Home() {
                 </div>
                 <div className="a-row" style={{alignItems:'flex-start'}}>
                   <span className="a-lbl" style={{paddingTop:6}}>Texto:</span>
-                  <textarea
-                    value={shameText}
-                    onChange={e=>setShameText(e.target.value)}
-                    placeholder="Mensagem opcional abaixo do nome (ex: mandou 6x0 no Brasil...)"
-                    rows={3}
-                    style={{flex:1,background:C.bgInput,border:`1px solid ${dm?'rgba(212,175,55,.25)':C.border}`,color:C.text,fontSize:13,padding:'7px 12px',borderRadius:5,outline:'none',resize:'vertical',fontFamily:'inherit',lineHeight:1.4}}
-                  />
+                  <textarea value={shameText} onChange={e=>setShameText(e.target.value)}
+                    placeholder="Mensagem opcional abaixo do nome..." rows={3}
+                    style={{flex:1,background:C.bgInput,border:`1px solid ${dm?'rgba(212,175,55,.25)':C.border}`,color:C.text,fontSize:13,padding:'7px 12px',borderRadius:5,outline:'none',resize:'vertical',fontFamily:'inherit',lineHeight:1.4}}/>
                 </div>
                 <div style={{marginTop:10,display:'flex',gap:8}}>
                   <button className="btn-sm btn-gold" onClick={saveShame}>💾 Salvar</button>
@@ -1179,10 +1137,7 @@ export default function Home() {
               <div className="section-title">Dados & Segurança</div>
               <div className="reset-box">
                 <div className="reset-title">🗑 Zerar Todos os Dados</div>
-                <div className="reset-desc">
-                  Apaga palpites, pontuações, resultados e histórico de rodadas.<br/>
-                  Mantém: configuração de pontuação, senha admin e lista de jogadores.
-                </div>
+                <div className="reset-desc">Apaga palpites, pontuações, resultados e histórico.<br/>Mantém: pontuação, senha admin e jogadores.</div>
                 <button className="btn-sm btn-danger" onClick={()=>setShowResetModal(true)}>⚠ Zerar Tudo</button>
               </div>
               <div className="a-card">
@@ -1197,5 +1152,180 @@ export default function Home() {
         </>}
       </div>
     </>
+  )
+}
+
+// ── ABA GUIA (componente separado para não poluir o Home) ───────────────────
+function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight }: any) {
+  const [osTab, setOsTab] = useState<'android'|'iphone'>('android')
+
+  return (
+    <div>
+      {/* Hero */}
+      <div style={{background:dm?'linear-gradient(135deg,rgba(0,60,30,.7),rgba(0,30,60,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,30,80,.05))',border:`1px solid ${C.border}`,borderRadius:8,padding:20,marginBottom:20,textAlign:'center'}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:4,color:C.gold,marginBottom:6}}>📖 GUIA DO PALPITÃO</div>
+        <div style={{fontSize:13,color:C.textMuted,lineHeight:1.5}}>Tudo que você precisa saber para palpitar, pontuar e ganhar 🏆</div>
+      </div>
+
+      {/* PONTUAÇÃO */}
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>⚽ Pontuação</div>
+
+      <GuiaItem title="Como funciona a pontuação?" icon="🎯" defaultOpen={true}>
+        <div style={guideTextStyle}>
+          {state.scoringPhases.map((ph:any)=>(
+            <div key={ph.id} style={{marginBottom:14}}>
+              <div style={{...guideHighlight,fontSize:13,marginBottom:8,color:C.gold}}>{ph.name}</div>
+              {ph.rules.map((r:any,i:number)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+                  <span style={{background:i===2?'rgba(0,166,81,.3)':i===1?'rgba(212,175,55,.2)':'rgba(255,255,255,.08)',color:i===2?'#00c060':i===1?C.gold:C.textMuted,border:`1px solid ${i===2?'rgba(0,166,81,.4)':i===1?'rgba(212,175,55,.35)':'rgba(255,255,255,.12)'}`,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,minWidth:36,textAlign:'center' as const}}>
+                    {r.pts}pts
+                  </span>
+                  <span style={{fontSize:13}}>{r.desc}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{borderTop:`1px solid ${C.borderFaint}`,paddingTop:10,marginTop:4,display:'flex',gap:16,flexWrap:'wrap' as const}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:C.textMuted}}>
+              <span style={{background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.35)',borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700}}>+{state.multipliers?.quemAvanca??2}×</span>
+              Bônus quem avança (× mult. da fase)
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,fontSize:12,color:C.textMuted}}>
+              <span style={{background:'rgba(255,255,255,.08)',color:C.textMuted,border:'1px solid rgba(255,255,255,.12)',borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700}}>+{state.multipliers?.penaltisBonus??1}</span>
+              Bônus acertar pênaltis
+            </div>
+          </div>
+        </div>
+        <div style={guideTipStyle}>
+          💡 <b>Multiplicadores por fase:</b> Fase de Grupos ×1 · 16avos ×2 · Oitavas ×3 · Quartas ×4 · Semi ×5 · 3º Lugar e Final ×6
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="Como funciona o desempate?" icon="⚖️">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:10}}>Quando dois ou mais participantes têm a mesma pontuação total, o desempate segue esta ordem:</p>
+          <GuiaStep n={1} text="Maior número de placares exatos acertados (ex: acertou 2x1 quando o resultado foi 2x1)"/>
+          <GuiaStep n={2} text="Maior número de resultados corretos (vencedor ou empate, independente do placar)"/>
+          <GuiaStep n={3} text="Pedra, papel e tesoura ✂️ — pode o melhor vencer!"/>
+        </div>
+      </GuiaItem>
+
+      {/* REGRAS */}
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>📋 Regras do Palpite</div>
+
+      <GuiaItem title="Como e quando palpitar?" icon="✏️" defaultOpen={true}>
+        <div style={guideTextStyle}>
+          <GuiaStep n={1} text="Entre no app e selecione seu nome na tela inicial."/>
+          <GuiaStep n={2} text='Vá até a aba "Palpites" e preencha o placar que você acredita que vai acontecer em cada jogo."/>
+          <GuiaStep n={3} text="Clique em Salvar Palpites. Você pode editar quantas vezes quiser até o prazo!"/>
+        </div>
+        <div style={guideTipStyle}>
+          ⏱ <b>Prazo:</b> o 1º jogo da rodada trava no apito inicial. Os demais travam <b>30 minutos antes</b> do horário marcado.
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="Quem não palpitar perde pontos?" icon="⚠️">
+        <div style={guideTextStyle}>
+          <p>Sim. Quem não enviar o palpite até o prazo recebe <b style={{color:C.red}}>0 pontos</b> naquele jogo — não existe palpite padrão.</p>
+          <p style={{marginTop:8}}>Fique de olho no banner de aviso na tela Início que aparece quando você ainda tem palpites pendentes!</p>
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="O que são os extras (Quem Avança / Pênaltis)?" icon="🏴">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:10}}>Em fases eliminatórias, o admin pode ativar perguntas extras:</p>
+          <div style={{marginBottom:8}}>
+            <span style={guideHighlight}>🏴 Quem Avança?</span>
+            <p style={{marginTop:4}}>Você escolhe qual time passa para a próxima fase. Se acertar, ganha pontos bônus multiplicados pela fase.</p>
+          </div>
+          <div>
+            <span style={guideHighlight}>⚽ Vai para Pênaltis?</span>
+            <p style={{marginTop:4}}>Se você apostou em empate no tempo normal E acertou que foi para pênaltis, ganha pontos bônus fixos.</p>
+          </div>
+        </div>
+      </GuiaItem>
+
+      {/* INSTALAR */}
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>📱 Instalar no Celular</div>
+
+      <GuiaItem title="Adicionar à tela inicial (app sem instalar)" icon="📲" defaultOpen={true}>
+        <p style={{...guideTextStyle,marginBottom:14,color:C.textMuted}}>
+          Adicionar o Palpitão à tela inicial deixa ele com cara de app — abre em tela cheia, sem barra do navegador. Selecione seu sistema:
+        </p>
+        <div style={{display:'flex',gap:8,marginBottom:16}}>
+          <button className="os-tab" style={{flex:1,padding:10,borderRadius:6,border:`1px solid ${osTab==='android'?C.gold:C.borderFaint}`,background:osTab==='android'?C.gold:'transparent',color:osTab==='android'?'#001a0a':C.textMuted,fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,letterSpacing:1,cursor:'pointer'}} onClick={()=>setOsTab('android')}>🤖 Android</button>
+          <button className="os-tab" style={{flex:1,padding:10,borderRadius:6,border:`1px solid ${osTab==='iphone'?C.gold:C.borderFaint}`,background:osTab==='iphone'?C.gold:'transparent',color:osTab==='iphone'?'#001a0a':C.textMuted,fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,letterSpacing:1,cursor:'pointer'}} onClick={()=>setOsTab('iphone')}>🍎 iPhone</button>
+        </div>
+        {osTab==='android' && (
+          <div>
+            <div style={{...guideTextStyle,marginBottom:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,letterSpacing:1,color:C.gold}}>USANDO CHROME (recomendado)</div>
+            <GuiaStep n={1} text='Abra o site no Chrome e toque nos 3 pontinhos ⋮ no canto superior direito.'/>
+            <GuiaStep n={2} text='Toque em "Adicionar à tela inicial" ou "Instalar app".'/>
+            <GuiaStep n={3} text='Confirme tocando em "Adicionar". Pronto! O ícone aparece na sua tela.'/>
+            <div style={guideTipStyle}>
+              💡 Se aparecer um banner automático "Instalar Palpitão" na parte de baixo da tela, é só tocar nele — ainda mais fácil!
+            </div>
+          </div>
+        )}
+        {osTab==='iphone' && (
+          <div>
+            <div style={{...guideTextStyle,marginBottom:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,letterSpacing:1,color:C.gold}}>USANDO SAFARI (obrigatório no iPhone)</div>
+            <GuiaStep n={1} text='Abra o site no Safari (não funciona no Chrome do iPhone para isso).'/>
+            <GuiaStep n={2} text='Toque no ícone de compartilhar 〒 na barra inferior do Safari.'/>
+            <GuiaStep n={3} text='Role para baixo e toque em "Adicionar à Tela de Início".'/>
+            <GuiaStep n={4} text='Confirme o nome e toque em "Adicionar" no canto superior direito.'/>
+            <div style={guideTipStyle}>
+              ⚠️ <b>iPhone:</b> notificações push só funcionam se o app estiver adicionado à tela inicial pelo Safari. Sem isso, as notificações não chegam.
+            </div>
+          </div>
+        )}
+      </GuiaItem>
+
+      {/* NOTIFICAÇÕES */}
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase',color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>🔔 Notificações</div>
+
+      <GuiaItem title="Como ativar notificações?" icon="🔔">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:12}}>As notificações avisam quando uma nova rodada abre, para você não perder o prazo!</p>
+          <div style={{marginBottom:12}}>
+            <div style={{...guideHighlight,marginBottom:6}}>🤖 Android (Chrome)</div>
+            <GuiaStep n={1} text="Adicione o app à tela inicial conforme o guia acima."/>
+            <GuiaStep n={2} text='Quando o app pedir permissão de notificação, toque em "Permitir".'/>
+            <GuiaStep n={3} text="Pronto! Você receberá alertas mesmo com o app fechado."/>
+          </div>
+          <div>
+            <div style={{...guideHighlight,marginBottom:6}}>🍎 iPhone (Safari)</div>
+            <GuiaStep n={1} text="Adicione o app à tela inicial pelo Safari (obrigatório)."/>
+            <GuiaStep n={2} text="Abra o app pela tela inicial (não pelo Safari)."/>
+            <GuiaStep n={3} text='Quando aparecer o pedido de permissão, toque em "Permitir".'/>
+          </div>
+          <div style={guideTipStyle}>
+            ⚠️ Se você recusou a permissão antes, vá em Configurações do celular → Notificações → Palpitão e ative manualmente.
+          </div>
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="Quais notificações vou receber?" icon="📣">
+        <div style={guideTextStyle}>
+          <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:10}}>
+            <span style={{fontSize:20}}>🟢</span>
+            <div><b style={guideHighlight}>Rodada aberta</b><br/><span style={{fontSize:13,color:C.textMuted}}>Quando o admin abre uma nova rodada de palpites.</span></div>
+          </div>
+          <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:10}}>
+            <span style={{fontSize:20}}>⏱</span>
+            <div><b style={guideHighlight}>Lembrete de prazo</b><br/><span style={{fontSize:13,color:C.textMuted}}>Aviso quando falta pouco tempo para o primeiro jogo travar.</span></div>
+          </div>
+          <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+            <span style={{fontSize:20}}>🏆</span>
+            <div><b style={guideHighlight}>Resultado disponível</b><br/><span style={{fontSize:13,color:C.textMuted}}>Quando o admin lançar a pontuação da rodada.</span></div>
+          </div>
+        </div>
+        <div style={guideTipStyle}>
+          🚧 O sistema de notificações está em desenvolvimento. Em breve você poderá ativar diretamente aqui no app!
+        </div>
+      </GuiaItem>
+
+      <div style={{height:20}}/>
+    </div>
   )
 }

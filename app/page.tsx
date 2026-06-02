@@ -902,6 +902,30 @@ export default function Home() {
           {activeTab==='palpites' && <div>
             <div className="section-title">Meus Palpites</div>
             {!state.palpitesOpen&&<div className="a-warn">🔒 Palpites bloqueados. Aguarde a administração abrir.</div>}
+            {/* Banner cômico: jogos travados sem palpite */}
+            {(()=>{
+              if(!currentUser||isAdmin) return null
+              const travadosSemPalpite = state.round.matches.filter((m:any,idx:number)=>{
+                const locked = isMatchLocked(m,idx)
+                const pal = state.palpites[currentUser!]?.[m.id]
+                return locked && (!pal || pal.h === '')
+              })
+              if(!travadosSemPalpite.length) return null
+              return (
+                <div style={{background:'linear-gradient(135deg,rgba(192,57,43,.2),rgba(150,30,10,.15))',border:'1px solid rgba(192,57,43,.4)',borderRadius:'var(--radius)',padding:'14px 18px',marginBottom:16,textAlign:'center' as const}}>
+                  <div style={{fontSize:28,marginBottom:6}}>🤡</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,letterSpacing:3,color:'#e74c3c',marginBottom:4}}>
+                    iii mané... esqueceu de palpitar foi?
+                  </div>
+                  <div style={{fontSize:13,color:C.textMuted}}>
+                    {travadosSemPalpite.length === 1
+                      ? `Você perdeu o prazo de ${travadosSemPalpite[0].home} x ${travadosSemPalpite[0].away} 💀`
+                      : `Você perdeu o prazo de ${travadosSemPalpite.length} jogos 💀`
+                    }
+                  </div>
+                </div>
+              )
+            })()}
             <div className="pal-hdr">
               <div className="pal-rname">{state.round.name}</div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>

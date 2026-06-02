@@ -4,8 +4,10 @@ import Script from 'next/script'
 export const metadata: Metadata = {
   title: 'Palpitão Copa do Mundo 2026',
   description: 'Bolão Copa do Mundo 2026',
+  manifest: '/manifest.webmanifest',
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>",
+    icon: '/icon-192x192.png',
+    apple: '/apple-touch-icon.png',
   },
 }
 

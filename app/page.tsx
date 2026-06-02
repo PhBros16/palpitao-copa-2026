@@ -429,10 +429,20 @@ export default function Home() {
     await saveState(newState, authPassword); showNotif('Salvo!')
   }
 
-  // Verificar status de notificação push
+  // Verificar status de notificação push direto pelo OneSignal
   useEffect(()=>{
-    if(typeof window !== 'undefined' && 'Notification' in window) {
-      setPushStatus(Notification.permission as any)
+    if(typeof window !== 'undefined') {
+      const win = window as any;
+      win.OneSignalDeferred = win.OneSignalDeferred || [];
+      win.OneSignalDeferred.push(function(OneSignal: any) {
+        if (OneSignal.Notifications.permission === true) {
+          setPushStatus('granted');
+        } else if (Notification.permission === 'denied') {
+          setPushStatus('denied');
+        } else {
+          setPushStatus('default');
+        }
+      });
     }
   },[])
 
@@ -441,9 +451,17 @@ export default function Home() {
     const win = window as any
     if(win.OneSignalDeferred) {
       win.OneSignalDeferred.push(async (OneSignal: any) => {
-        await OneSignal.Notifications.requestPermission()
-        setPushStatus(Notification.permission as any)
-        if(Notification.permission === 'granted') showNotif('Notificações ativadas! 🔔')
+        try {
+          await OneSignal.Notifications.requestPermission();
+          if(OneSignal.Notifications.permission === true) {
+            setPushStatus('granted');
+            showNotif('Notificações ativadas! 🔔', 'success');
+          } else {
+            setPushStatus('denied');
+          }
+        } catch (error) {
+          console.error("Erro no OneSignal:", error);
+        }
       })
     }
   }
@@ -1510,15 +1528,15 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
             ⚠️ Se você recusou a permissão antes, vá em Configurações do celular → Notificações → Palpitão e ative manualmente.
           </div>
         </div>
-        {/* Botão de ativar direto */}
+        
         <div style={{marginTop:14,padding:'14px 16px',background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.border}`,borderRadius:8,textAlign:'center' as const}}>
           {pushStatus==='granted'
-            ? <div style={{color:C.green,fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:600,letterSpacing:1}}>✅ Notificações já ativadas!</div>
+            ? <div style={{color:C.green,fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:600,letterSpacing:1}}>✅ NOTIFICAÇÕES ATIVADAS!</div>
             : pushStatus==='denied'
-              ? <div style={{color:C.red,fontSize:13}}>🚫 Notificações bloqueadas. Ative nas configurações do navegador.</div>
+              ? <div style={{color:C.red,fontSize:13, lineHeight:1.4}}>🚫 Bloqueadas. Acesse as configurações do seu navegador ou celular para permitir.</div>
               : <div>
-                  <div style={{fontSize:13,color:C.textMuted,marginBottom:10}}>Ative as notificações para ser avisado quando uma rodada abrir!</div>
-                  <button onClick={requestPushPermission} style={{background:C.gold,color:'#001a0a',border:'none',fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:700,letterSpacing:2,padding:'10px 24px',borderRadius:6,cursor:'pointer'}}>
+                  <div style={{fontSize:13,color:C.textMuted,marginBottom:10}}>Toque abaixo para receber alertas e não perder os prazos!</div>
+                  <button onClick={requestPushPermission} style={{background:C.gold,color:'#001a0a',border:'none',fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:700,letterSpacing:2,padding:'12px 24px',borderRadius:6,cursor:'pointer', width: '100%'}}>
                     🔔 ATIVAR NOTIFICAÇÕES
                   </button>
                 </div>
@@ -1541,9 +1559,11 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
             <div><b style={guideHighlight}>Resultado disponível</b><br/><span style={{fontSize:13,color:C.textMuted}}>Quando o admin lançar a pontuação da rodada.</span></div>
           </div>
         </div>
-        <div style={guideTipStyle}>
-          🚧 O sistema de notificações está em desenvolvimento. Em breve você poderá ativar diretamente aqui no app!
-        </div>
+        {pushStatus !== 'granted' && (
+          <div style={guideTipStyle}>
+            💡 <b>Dica:</b> Volte no item acima para ativar as notificações e não perder seus pontos!
+          </div>
+        )}
       </GuiaItem>
 
       <div style={{height:20}}/>

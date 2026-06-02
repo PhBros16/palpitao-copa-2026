@@ -42,6 +42,7 @@ function defaultState(): any {
     roundFinalized:false,
     scoringPhases:defaultScoringPhases(),
     multipliers:defaultMultipliers(),
+    novidades:[] as any[],
   }
 }
 
@@ -165,6 +166,9 @@ export default function Home() {
   const [shameText, setShameText] = useState('')
   const [newPass, setNewPass] = useState('')
   const [masterConf, setMasterConf] = useState('')
+  const [showNovidade, setShowNovidade] = useState(false)
+  const [novidadeAtual, setNovidadeAtual] = useState<any>(null)
+  const [novidadeBuf, setNovidadeBuf] = useState({titulo:'', resumo:''})
   const notifTimer = useRef<any>(null)
 
   const [, setTick] = useState(0)
@@ -192,6 +196,7 @@ export default function Home() {
       if(!s.palpites) s.palpites={}
       if(!s.results) s.results={}
       if(!s.multipliers) s.multipliers=defaultMultipliers()
+      if(!s.novidades) s.novidades=[]
       if(s.round?.matches) {
         s.round.matches = s.round.matches.map((m:any)=>({
           date:'', locked:false, hasQuemAvanca:false, hasPenaltis:false, ...m
@@ -227,6 +232,16 @@ export default function Home() {
       const local: any={}
       state.round.matches.forEach((m:any)=>{ local[m.id]=myPal[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''} })
       setLocalPalpites(local)
+      // Verificar novidade não lida
+      const novs: any[] = state.novidades||[]
+      if(novs.length > 0) {
+        const latest = novs[novs.length-1]
+        const seen = localStorage.getItem('palpitao_novidade_seen')
+        if(seen !== latest.id) {
+          setNovidadeAtual(latest)
+          setShowNovidade(true)
+        }
+      }
     }
   }
 
@@ -404,6 +419,29 @@ export default function Home() {
     const newState=JSON.parse(JSON.stringify(state))
     newState.shame={player:shamePlayer,photoUrl:shameUrl,text:shameText}
     await saveState(newState, authPassword); showNotif('Salvo!')
+  }
+
+  async function saveNovidade() {
+    if(!state||!novidadeBuf.titulo.trim()) return
+    const newState=JSON.parse(JSON.stringify(state))
+    if(!newState.novidades) newState.novidades=[]
+    newState.novidades.push({
+      id: 'nov_'+Date.now(),
+      titulo: novidadeBuf.titulo.trim(),
+      resumo: novidadeBuf.resumo.trim(),
+      data: new Date().toLocaleDateString('pt-BR')
+    })
+    await saveState(newState, authPassword)
+    setNovidadeBuf({titulo:'', resumo:''})
+    showNotif('Novidade publicada! 🆕')
+  }
+
+  async function removeNovidade(id: string) {
+    if(!state) return
+    const newState=JSON.parse(JSON.stringify(state))
+    newState.novidades=(newState.novidades||[]).filter((n:any)=>n.id!==id)
+    await saveState(newState, authPassword)
+    showNotif('Novidade removida.')
   }
 
   async function changeAdminPass() {
@@ -655,6 +693,21 @@ export default function Home() {
         </div>
       </div>}
 
+      {/* Modal Novidade */}
+      {showNovidade && novidadeAtual && <div className="modal-overlay open">
+        <div className="modal" style={{maxWidth:400}}>
+          <div style={{background:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:8,padding:'8px 14px',marginBottom:16,display:'inline-block'}}>
+            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:2,color:C.gold}}>🆕 NOVIDADE · {novidadeAtual.data}</span>
+          </div>
+          <h3 style={{marginBottom:10,fontSize:18}}>{novidadeAtual.titulo}</h3>
+          {novidadeAtual.resumo && <p style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.6,textAlign:'left'}}>{novidadeAtual.resumo}</p>}
+          <button className="btn-primary" style={{width:'100%'}} onClick={()=>{
+            localStorage.setItem('palpitao_novidade_seen', novidadeAtual.id)
+            setShowNovidade(false)
+          }}>Entendi! 👍</button>
+        </div>
+      </div>}
+
       <div style={{position:'relative'}}>
         <header>
           <div className="header-badge">⚽ Edição Especial</div>
@@ -690,16 +743,44 @@ export default function Home() {
           </div>
 
           <div className="tabs-nav">
-            {['home','palpites','geral','ranking','historico','guia'].map(t=>(
-              <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)}>
-                {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
-              </button>
-            ))}
+            {['home','palpites','geral','ranking','historico','guia'].map(t=>{
+              const hasNovidade = t==='home' && (()=>{
+                const novs: any[] = state.novidades||[]
+                if(!novs.length) return false
+                const seen = typeof window !== 'undefined' ? localStorage.getItem('palpitao_novidade_seen') : null
+                return seen !== novs[novs.length-1]?.id
+              })()
+              return (
+                <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)} style={{position:'relative'}}>
+                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
+                  {hasNovidade && <span style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'#e74c3c',border:'1px solid rgba(0,0,0,.3)'}}/>}
+                </button>
+              )
+            })}
             {isAdmin && <button className={`tab-btn${activeTab==='admin'?' active':''}`} onClick={()=>setActiveTab('admin')}>⚙ Admin</button>}
           </div>
 
           {/* HOME */}
           {activeTab==='home' && <div>
+            {/* Banner novidade não lida */}
+            {(()=>{
+              const novs: any[] = state.novidades||[]
+              if(!novs.length) return null
+              const latest = novs[novs.length-1]
+              const seen = typeof window !== 'undefined' ? localStorage.getItem('palpitao_novidade_seen') : null
+              if(seen === latest.id) return null
+              return (
+                <div style={{background:dm?'rgba(0,60,120,.25)':'rgba(0,40,100,.08)',border:'1px solid rgba(100,150,255,.3)',borderRadius:'var(--radius)',padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}
+                  onClick={()=>{setNovidadeAtual(latest);setShowNovidade(true)}}>
+                  <span style={{fontSize:20}}>🆕</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,color:'#7ab0ff',letterSpacing:1}}>NOVIDADE · {latest.data}</div>
+                    <div style={{fontSize:12,color:C.textMuted}}>{latest.titulo}</div>
+                  </div>
+                  <span style={{color:'#7ab0ff',fontSize:18}}>→</span>
+                </div>
+              )
+            })()}
             {!isAdmin && state.palpitesOpen && state.round.matches.length>0 && !state.roundFinalized && (()=>{
               const myPal=state.palpites[currentUser!]||{}
               const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx)&&(!myPal[m.id]||myPal[m.id].h===''))
@@ -1131,6 +1212,42 @@ export default function Home() {
                   <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('');setShameText('')}}>Limpar</button>
                 </div>
               </div>
+            </div>
+
+            <div style={{marginBottom:24}}>
+              <div className="section-title">Novidades</div>
+              <div className="a-card">
+                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                  Publique uma novidade para aparecer como pop-up quando os participantes entrarem no app.
+                </div>
+                <div className="a-row"><span className="a-lbl">Título:</span>
+                  <input className="a-in lg" value={novidadeBuf.titulo} onChange={e=>setNovidadeBuf(b=>({...b,titulo:e.target.value}))} placeholder="ex: Nova aba Guia disponível!"/>
+                </div>
+                <div className="a-row" style={{alignItems:'flex-start'}}>
+                  <span className="a-lbl" style={{paddingTop:6}}>Resumo:</span>
+                  <textarea value={novidadeBuf.resumo} onChange={e=>setNovidadeBuf(b=>({...b,resumo:e.target.value}))}
+                    placeholder="Breve descrição do que foi adicionado ou alterado..." rows={3}
+                    style={{flex:1,background:C.bgInput,border:`1px solid ${dm?'rgba(212,175,55,.25)':C.border}`,color:C.text,fontSize:13,padding:'7px 12px',borderRadius:5,outline:'none',resize:'vertical',fontFamily:'inherit',lineHeight:1.4}}/>
+                </div>
+                <div style={{marginTop:10}}>
+                  <button className="btn-sm btn-gold" onClick={saveNovidade} disabled={!novidadeBuf.titulo.trim()}>🆕 Publicar Novidade</button>
+                </div>
+              </div>
+              {(state.novidades||[]).length > 0 && (
+                <div className="a-card">
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,letterSpacing:1,color:C.textMuted,marginBottom:10}}>PUBLICADAS</div>
+                  {[...(state.novidades||[])].reverse().map((n:any)=>(
+                    <div key={n.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'8px 0',borderBottom:`1px solid ${C.borderFaint}`}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:13,fontWeight:600,color:C.text}}>{n.titulo}</div>
+                        {n.resumo&&<div style={{fontSize:12,color:C.textMuted,marginTop:2}}>{n.resumo}</div>}
+                        <div style={{fontSize:11,color:C.textMuted,marginTop:3}}>{n.data}</div>
+                      </div>
+                      <button className="rm-btn" onClick={()=>removeNovidade(n.id)}>Remover</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{marginBottom:24}}>

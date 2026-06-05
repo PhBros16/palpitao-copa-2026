@@ -252,65 +252,73 @@ function EvolucaoChart({ history, players, C }: any) {
 
 // ── Estatísticas pessoais ───────────────────────────────────────────────────
 function EstatisticasPessoais({ player, history, C }: any) {
-  let totalJogos = 0, exatos = 0, corretos = 0, rodadas = 0
+  let totalJogos = 0, exatos = 0, vencedor = 0, saldo = 0, rodadas = 0
 
   history.forEach((r:any) => {
     if(r.scores?.[player] !== undefined) rodadas++
     if(r.tiebreak?.[player]) {
-      exatos += r.tiebreak[player].exact || 0
-      corretos += r.tiebreak[player].correct || 0
-      totalJogos += (r.tiebreak[player].exact || 0) + (r.tiebreak[player].correct || 0)
+      const t = r.tiebreak[player]
+      exatos  += t.exact   || 0
+      vencedor+= t.correct || 0  // correct = acertou vencedor (inclui exatos)
+      saldo   += t.saldo   || 0  // saldo = acertou saldo mas não exato
+      totalJogos += (t.exact||0) + (t.correct||0) + (t.saldo||0)
     }
   })
 
-  const pctExato = rodadas > 0 ? Math.round((exatos / Math.max(totalJogos + (corretos - exatos) + (rodadas * 2 - totalJogos), 1)) * 100) : 0
-  const pctCorreto = rodadas > 0 ? Math.round((corretos / Math.max(rodadas * 2, 1)) * 100) : 0
+  // % sobre total de jogos participados (estimado como rodadas * 2 jogos médios)
+  const totalEstimado = Math.max(rodadas * 2, 1)
+  const pctExato    = Math.round((exatos   / totalEstimado) * 100)
+  const pctVencedor = Math.round((vencedor / totalEstimado) * 100)
+  const pctSaldo    = Math.round((saldo    / totalEstimado) * 100)
 
   // Conquistas
   const conquistas = []
-  if(exatos >= 1) conquistas.push({icon:'🎯', label:'Sniper', desc:'1+ placar exato'})
-  if(exatos >= 5) conquistas.push({icon:'🔥', label:'Em Chamas', desc:'5+ placares exatos'})
-  if(rodadas >= 3) conquistas.push({icon:'💪', label:'Veterano', desc:'3+ rodadas'})
-  if(corretos >= 10) conquistas.push({icon:'⚡', label:'Consistente', desc:'10+ resultados certos'})
+  if(exatos   >= 1)  conquistas.push({icon:'🎯', label:'Sniper',      desc:'1+ placar exato'})
+  if(exatos   >= 5)  conquistas.push({icon:'🔥', label:'Em Chamas',   desc:'5+ placares exatos'})
+  if(rodadas  >= 3)  conquistas.push({icon:'💪', label:'Veterano',    desc:'3+ rodadas'})
+  if(vencedor >= 10) conquistas.push({icon:'⚡', label:'Consistente', desc:'10+ vencedores certos'})
+  if(saldo    >= 5)  conquistas.push({icon:'📐', label:'Calculista',  desc:'5+ saldos acertados'})
 
   return (
     <div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:16}}>
-        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 10px',textAlign:'center'}}>
-          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,color:C.gold,lineHeight:1}}>{rodadas}</div>
-          <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Rodadas</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:10,marginBottom:16}}>
+        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 8px',textAlign:'center'}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:C.gold,lineHeight:1}}>{rodadas}</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Rodadas</div>
         </div>
-        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 10px',textAlign:'center'}}>
-          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,color:'#00c060',lineHeight:1}}>{exatos}</div>
-          <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Exatos</div>
+        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 8px',textAlign:'center'}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:'#00c060',lineHeight:1}}>{exatos}</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Exatos</div>
         </div>
-        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 10px',textAlign:'center'}}>
-          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,color:'#3498db',lineHeight:1}}>{corretos}</div>
-          <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Corretos</div>
+        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 8px',textAlign:'center'}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:'#3498db',lineHeight:1}}>{vencedor}</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Vencedor</div>
+        </div>
+        <div style={{background:'rgba(0,50,25,0.5)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:8,padding:'12px 8px',textAlign:'center'}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:'#e67e22',lineHeight:1}}>{saldo}</div>
+          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Saldo</div>
         </div>
       </div>
 
       {/* Barras de % */}
-      <div style={{marginBottom:12}}>
-        <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:C.textMuted,marginBottom:4}}>
-          <span>% Placar exato</span><span style={{color:C.gold}}>{pctExato}%</span>
+      {[
+        {label:'% Placar exato',   pct:pctExato,    color:'#D4AF37,#F0D060'},
+        {label:'% Acertei o vencedor', pct:pctVencedor, color:'#3498db,#5dade2'},
+        {label:'% Ganhei por saldo',   pct:pctSaldo,    color:'#e67e22,#f39c12'},
+      ].map(({label,pct,color})=>(
+        <div key={label} style={{marginBottom:10}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:C.textMuted,marginBottom:4}}>
+            <span>{label}</span><span style={{color:`#${color.split(',')[0].replace('#','')}`}}>{pct}%</span>
+          </div>
+          <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden'}}>
+            <div style={{height:'100%',width:`${pct}%`,background:`linear-gradient(to right,${color})`,borderRadius:3,transition:'width 1s ease'}}/>
+          </div>
         </div>
-        <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden'}}>
-          <div style={{height:'100%',width:`${pctExato}%`,background:'linear-gradient(to right,#D4AF37,#F0D060)',borderRadius:3,transition:'width 1s ease'}}/>
-        </div>
-      </div>
-      <div style={{marginBottom:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:C.textMuted,marginBottom:4}}>
-          <span>% Resultado correto</span><span style={{color:'#3498db'}}>{pctCorreto}%</span>
-        </div>
-        <div style={{height:6,background:'rgba(255,255,255,0.08)',borderRadius:3,overflow:'hidden'}}>
-          <div style={{height:'100%',width:`${pctCorreto}%`,background:'linear-gradient(to right,#3498db,#5dade2)',borderRadius:3,transition:'width 1s ease'}}/>
-        </div>
-      </div>
+      ))}
 
       {/* Conquistas */}
       {conquistas.length > 0 && (
-        <div>
+        <div style={{marginTop:6}}>
           <div style={{fontSize:11,color:C.textMuted,letterSpacing:2,textTransform:'uppercase',marginBottom:8}}>🏅 Conquistas</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
             {conquistas.map((c,i)=>(
@@ -392,8 +400,18 @@ export default function Home() {
   const [notifMsg, setNotifMsg] = useState('')
   const [notifSending, setNotifSending] = useState(false)
   const [pushStatus, setPushStatus] = useState<'unknown'|'granted'|'denied'|'default'>('unknown')
-  // Compartilhar resultado
-  const [shareMsg, setShareMsg] = useState('')
+  const [compareTarget, setCompareTarget] = useState<string|null>(null)
+  const [projWindow, setProjWindow] = useState<number>(3) // janela de projeção em rodadas
+  const [importBuf, setImportBuf] = useState({league:'', season:'2026', round:'', apiKey:''})
+  const [importResults, setImportResults] = useState<any[]>([])
+  const [importSelected, setImportSelected] = useState<string[]>([])
+  const [importLoading, setImportLoading] = useState(false)
+  const [chatMsg, setChatMsg] = useState('')
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatLoading, setChatLoading] = useState(false)
+
+
+  const chatEndRef = useRef<any>(null)
   const notifTimer = useRef<any>(null)
 
   // Tick a cada segundo para countdowns
@@ -534,12 +552,13 @@ export default function Home() {
     return PLAYERS.map(p=>({
       name:p, total:s.totalPoints[p]||0,
       rodadas:s.roundHistory.filter((r:any)=>r.scores&&r.scores[p]!==undefined).length,
-      exact: s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.exact||0),0),
-      correct: s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.correct||0),0),
+      exact:   s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.exact||0),0),
+      vencedor:s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.correct||0),0),
+      saldo:   s.roundHistory.reduce((acc:number,r:any)=>acc+(r.tiebreak?.[p]?.saldo||0),0),
     })).sort((a:any,b:any)=>{
       if(b.total!==a.total) return b.total-a.total
       if(b.exact!==a.exact) return b.exact-a.exact
-      return b.correct-a.correct
+      return b.vencedor-a.vencedor
     })
   }
 
@@ -767,6 +786,145 @@ export default function Home() {
     await saveState(newState, authPassword); setAuthPassword(newPass); setNewPass(''); setMasterConf(''); showNotif('Senha alterada!')
   }
 
+  // ── Chat via Supabase ────────────────────────────────────────────────────
+  const fetchChat = useCallback(async (roundName: string) => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      const { data } = await sb
+        .from('chat_messages')
+        .select('*')
+        .eq('round', roundName || 'geral')
+        .order('ts', { ascending: true })
+        .limit(200)
+      if(data) setChatMessages(data)
+    } catch {}
+  }, [])
+
+  useEffect(()=>{
+    if(activeTab==='chat' && state) {
+      fetchChat(state.round?.name || 'geral')
+      const t = setInterval(()=>fetchChat(state.round?.name || 'geral'), 5000)
+      return ()=>clearInterval(t)
+    }
+  },[activeTab, fetchChat, state])
+
+  useEffect(()=>{
+    if(chatEndRef.current) chatEndRef.current.scrollIntoView({behavior:'smooth'})
+  },[chatMessages])
+
+  async function sendChatMsg() {
+    if(!chatMsg.trim()||!currentUser||!state) return
+    const text = chatMsg.trim()
+    setChatMsg('')
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      const { data } = await sb.from('chat_messages').insert({
+        user: currentUser,
+        text,
+        round: state.round?.name || 'geral',
+        reactions: {}
+      }).select().single()
+      if(data) setChatMessages(prev=>[...prev, data])
+    } catch {}
+  }
+
+  async function toggleChatReaction(msgId: string, emoji: string) {
+    if(!currentUser) return
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      const msg = chatMessages.find((m:any)=>m.id===msgId)
+      if(!msg) return
+      const cur: string[] = msg.reactions?.[emoji] || []
+      const already = cur.includes(currentUser)
+      const updated = already ? cur.filter((u:string)=>u!==currentUser) : [...cur, currentUser]
+      const newReactions = {...msg.reactions, [emoji]: updated}
+      await sb.from('chat_messages').update({ reactions: newReactions }).eq('id', msgId)
+      setChatMessages(prev=>prev.map((m:any)=>m.id===msgId?{...m,reactions:newReactions}:m))
+    } catch {}
+  }
+
+  async function clearChat() {
+    if(!state||!confirm('Limpar todo o chat desta rodada?')) return
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+      await sb.from('chat_messages').delete().eq('round', state.round?.name || 'geral')
+      setChatMessages([])
+      showNotif('Chat limpo!')
+    } catch { showNotif('Erro ao limpar chat','error') }
+  }
+
+  // ── Projeção de campeão (%) ──────────────────────────────────────────────
+  function calcProjecaoPct(s: any, windowSize: number): Record<string, number|null> {
+    const hist = s.roundHistory
+    if(hist.length < 2) return {}  // menos de 2 rodadas = sem dados
+    const lastN = windowSize === 0 ? hist.length : Math.min(windowSize, hist.length)
+    const recent = hist.slice(-lastN)
+    const projecoes: Record<string,number> = {}
+    PLAYERS.forEach(p => {
+      const media = recent.reduce((acc:number,r:any)=>acc+(r.scores?.[p]||0),0) / lastN
+      const totalAtual = s.totalPoints[p]||0
+      const rodadasRestantes = Math.max(hist.length, 2)
+      projecoes[p] = totalAtual + media * rodadasRestantes
+    })
+    const total = Object.values(projecoes).reduce((a,b)=>a+b, 0)
+    if(total === 0) return {}
+    const result: Record<string,number> = {}
+    PLAYERS.forEach(p => { result[p] = Math.round((projecoes[p]/total)*100) })
+    return result
+  }
+
+  // ── Importar jogos via API-Football ─────────────────────────────────────
+  async function fetchImportJogos() {
+    if(!importBuf.apiKey||!importBuf.league||!importBuf.round) {
+      showNotif('Preencha a chave, liga e rodada','error'); return
+    }
+    setImportLoading(true)
+    setImportResults([])
+    try {
+      // Busca via nosso proxy para não expor a key no front
+      const res = await fetch(`/api/import-games?league=${importBuf.league}&season=${importBuf.season}&round=${encodeURIComponent(importBuf.round)}&apiKey=${importBuf.apiKey}`)
+      const json = await res.json()
+      if(json.error) { showNotif(json.error,'error'); return }
+      setImportResults(json.games||[])
+      setImportSelected((json.games||[]).map((g:any)=>g.id))
+      if(!json.games?.length) showNotif('Nenhum jogo encontrado','error')
+    } catch { showNotif('Erro ao buscar jogos','error') }
+    finally { setImportLoading(false) }
+  }
+
+  function applyImportJogos() {
+    const toImport = importResults.filter(g=>importSelected.includes(g.id))
+    if(!toImport.length) { showNotif('Selecione ao menos 1 jogo','error'); return }
+    const newMatches = toImport.map(g=>({
+      id: 'm'+Date.now()+Math.random().toString(36).slice(2),
+      home: g.home, away: g.away,
+      homeFlag: g.homeLogo ? '' : g.homeFlag||'🏳',
+      awayFlag: g.awayLogo ? '' : g.awayFlag||'🏳',
+      homeLogo: g.homeLogo||'', awayLogo: g.awayLogo||'',
+      date: g.date, time: g.time,
+      locked: false, hasQuemAvanca: false, hasPenaltis: false
+    }))
+    setAdminBuf((b:any)=>({...b, matches:[...(b.matches||[]), ...newMatches]}))
+    setImportResults([]); setImportSelected([])
+    showNotif(`${newMatches.length} jogo(s) importado(s)! ✅`)
+  }
+
   // Compartilhar ranking ou parcial via WhatsApp (só admin)
   function shareRanking(tipo: 'geral'|'parcial') {
     if(!state) return
@@ -986,8 +1144,20 @@ export default function Home() {
         .guia-hero{background:${dm?'linear-gradient(135deg,rgba(0,60,30,.7),rgba(0,30,60,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,30,80,.05))'};border:var(--border-gold);border-radius:var(--radius);padding:20px;margin-bottom:20px;text-align:center;}
         .os-tab{flex:1;padding:10px;border-radius:6px;border:1px solid ${C.borderFaint};background:transparent;color:${C.textMuted};font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all .2s;}
         .os-tab.active{background:var(--gold);color:#001a0a;border-color:var(--gold);}
-        @media(max-width:600px){
-          .grid-4{grid-template-columns:1fr 1fr;gap:8px;}.stat-card{padding:12px 10px;}.stat-value{font-size:26px;}.stat-label{font-size:9px;}
+        .compare-row{cursor:pointer;transition:background .15s;}
+        .compare-row:hover td{background:${dm?'rgba(212,175,55,.06)':'rgba(212,175,55,.1)'}!important;}
+        .reaction-bar{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+        .reaction-btn{background:${dm?'rgba(255,255,255,.06)':'rgba(0,0,0,.05)'};border:1px solid ${C.borderFaint};borderRadius:20px;padding:2px 8px;fontSize:12px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all .15s;}
+        .reaction-btn.mine{background:rgba(212,175,55,.15);border-color:var(--gold);}
+        .live-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(192,57,43,.2);border:1px solid rgba(192,57,43,.4);borderRadius:4px;padding:2px 8px;fontSize:11px;color:#e74c3c;fontFamily:"'Barlow Condensed',sans-serif";letterSpacing:1;animation:pulse 1.5s ease infinite;}
+        .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 280px);min-height:300px;max-height:500px;}
+        .chat-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;}
+        .chat-bubble{max-width:80%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.4;}
+        .chat-bubble.mine{align-self:flex-end;background:var(--gold);color:#001a0a;border-radius:12px 12px 2px 12px;}
+        .chat-bubble.other{align-self:flex-start;background:${dm?'rgba(0,50,25,.6)':'rgba(0,80,40,.1)'};color:${C.text};border:1px solid ${C.borderFaint};border-radius:12px 12px 12px 2px;}
+        .chat-input-row{display:flex;gap:8px;padding:10px 0 0;border-top:1px solid ${C.borderFaint};}
+        .previsao-bar{height:8px;background:'rgba(255,255,255,.08)';border-radius:4px;overflow:hidden;margin-top:4px;}
+        @media(max-width:600px){.compare-row td{font-size:12px;}}
           .grid-2{grid-template-columns:1fr;}
           .tab-btn{font-size:11px;padding:8px 10px;}
           .topbar-actions .btn-sm{padding:7px 12px;font-size:11px;}
@@ -1086,17 +1256,28 @@ export default function Home() {
           </div>
 
           <div className="tabs-nav">
-            {['home','palpites','geral','ranking','historico','guia'].map(t=>{
+            {['home','palpites','geral','ranking','historico','chat','guia'].map(t=>{
               const hasNovidade = t==='home' && (()=>{
                 const novs: any[] = state.novidades||[]
                 if(!novs.length) return false
                 const seen = typeof window !== 'undefined' ? localStorage.getItem('palpitao_novidade_seen') : null
                 return seen !== novs[novs.length-1]?.id
               })()
+              const hasChatNew = t==='chat' && activeTab!=='chat' && chatMessages.length > 0 && (()=>{
+                const lastSeen = typeof window !== 'undefined' ? localStorage.getItem('palpitao_chat_seen') : null
+                const lastMsg = chatMessages[chatMessages.length-1]
+                return lastMsg && lastSeen !== lastMsg.ts
+              })()
               return (
-                <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)} style={{position:'relative'}}>
-                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
-                  {hasNovidade && <span style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'#e74c3c',border:'1px solid rgba(0,0,0,.3)'}}/>}
+                <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>{
+                  setActiveTab(t)
+                  if(t==='chat'&&chatMessages.length>0) {
+                    const lastMsg = chatMessages[chatMessages.length-1]
+                    if(lastMsg) localStorage.setItem('palpitao_chat_seen', lastMsg.ts)
+                  }
+                }} style={{position:'relative'}}>
+                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':t==='chat'?'💬 Chat':'📖 Guia'}
+                  {(hasNovidade||hasChatNew) && <span style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'#e74c3c',border:'1px solid rgba(0,0,0,.3)'}}/>}
                 </button>
               )
             })}
@@ -1270,11 +1451,15 @@ export default function Home() {
 
               return <div key={m.id} className={`match-card${locked?' locked':''}`}>
                 <div className="match-teams">
-                  <span className="team-flag">{m.homeFlag||'🏳'}</span>
+                  {m.homeLogo
+                    ? <img src={m.homeLogo} alt={m.home} style={{width:28,height:28,objectFit:'contain'}}/>
+                    : <span className="team-flag">{m.homeFlag||'🏳'}</span>}
                   <span className="team-name">{m.home}</span>
                   <span className="vs-txt">x</span>
                   <span className="team-name">{m.away}</span>
-                  <span className="team-flag">{m.awayFlag||'🏳'}</span>
+                  {m.awayLogo
+                    ? <img src={m.awayLogo} alt={m.away} style={{width:28,height:28,objectFit:'contain'}}/>
+                    : <span className="team-flag">{m.awayFlag||'🏳'}</span>}
                 </div>
                 <div className="score-grp">
                   <input className="score-in" type="number" inputMode="numeric" min={0} max={20} value={pal.h} disabled={locked}
@@ -1390,25 +1575,51 @@ export default function Home() {
               )
             })()}
 
-            <div className="table-wrap" style={{marginBottom:20}}>
-              <table className="dt">
-                <thead><tr><th style={{width:40}}>#</th><th>Participante</th><th className="r">Pontos</th><th className="r">Exatos</th><th className="r">Corretos</th><th className="r">Rodadas</th></tr></thead>
-                <tbody>
-                  {sorted.map((d:any,i:number)=>{
-                    const prevTotal = i>0?sorted[i-1].total:null
-                    const tied = prevTotal===d.total && d.total > 0
-                    return <tr key={d.name} style={tied?{background:dm?'rgba(212,175,55,.04)':'rgba(212,175,55,.08)'}:{}}>
-                      <td>{posIcon(i)}</td>
-                      <td style={{whiteSpace:'nowrap'}}>{d.name}{tied&&<span style={{fontSize:10,color:C.gold,marginLeft:4}}>≈</span>}</td>
-                      <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold}}>{d.total}</td>
-                      <td className="r" style={{color:C.textMuted}}>{d.exact}</td>
-                      <td className="r" style={{color:C.textMuted}}>{d.correct}</td>
-                      <td className="r" style={{color:C.textMuted}}>{d.rodadas}</td>
-                    </tr>
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {(()=>{
+              const projecoes = calcProjecaoPct(state, projWindow)
+              const hasProj = Object.keys(projecoes).length > 0
+              return (
+                <div className="table-wrap" style={{marginBottom:20}}>
+                  <table className="dt">
+                    <thead><tr>
+                      <th style={{width:40}}>#</th>
+                      <th>Participante</th>
+                      <th className="r">Pontos</th>
+                      <th className="r">Exatos</th>
+                      <th className="r">Vencedor</th>
+                      <th className="r">Saldo</th>
+                      <th className="r" style={{color:'#9b59b6'}}>Projeção</th>
+                    </tr></thead>
+                    <tbody>
+                      {sorted.map((d:any,i:number)=>{
+                        const prevTotal = i>0?sorted[i-1].total:null
+                        const tied = prevTotal===d.total && d.total > 0
+                        const proj = projecoes[d.name]
+                        return <tr key={d.name} style={tied?{background:dm?'rgba(212,175,55,.04)':'rgba(212,175,55,.08)'}:{}} onClick={()=>setCompareTarget(d.name)} className="compare-row">
+                          <td>{posIcon(i)}</td>
+                          <td style={{whiteSpace:'nowrap'}}>{d.name}{tied&&<span style={{fontSize:10,color:C.gold,marginLeft:4}}>≈</span>}</td>
+                          <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold}}>{d.total}</td>
+                          <td className="r" style={{color:C.textMuted}}>{d.exact}</td>
+                          <td className="r" style={{color:C.textMuted}}>{d.vencedor}</td>
+                          <td className="r" style={{color:C.textMuted}}>{d.saldo}</td>
+                          <td className="r">
+                            {!hasProj
+                              ? <span style={{color:C.textSub,fontSize:13}}>—</span>
+                              : <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:'#9b59b6'}}>{proj}%</span>
+                            }
+                          </td>
+                        </tr>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })()}
+
+            {/* Dica comparativo */}
+            {!isAdmin && <div style={{fontSize:11,color:C.textMuted,textAlign:'center',marginBottom:12,padding:'6px',background:dm?'rgba(212,175,55,.05)':'rgba(212,175,55,.08)',borderRadius:6,border:`1px solid ${C.borderFaint}`}}>
+              👆 Toque em qualquer participante para ver o comparativo frente a frente
+            </div>}
 
             {/* Gráfico de evolução */}
             {state.roundHistory.length > 0 && (
@@ -1454,8 +1665,148 @@ export default function Home() {
             ))}
           </div>}
 
+          {/* ── CHAT ── */}
+          {activeTab==='chat'&&<div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
+              <div className="section-title" style={{marginBottom:0}}>💬 Chat da Rodada</div>
+              {isAdmin&&<button className="btn-sm btn-danger" style={{fontSize:11,padding:'5px 12px'}} onClick={clearChat}>🗑 Limpar Chat</button>}
+            </div>
+            <div className="section-sub" style={{marginBottom:12}}>Reaja, provoque, comemore — tudo na boa 😄 · <span style={{color:C.textMuted}}>Rodada: {state.round.name||'—'}</span></div>
+            <div className="card" style={{padding:0,overflow:'hidden',marginBottom:0}}>
+              <div className="chat-wrap">
+                <div className="chat-messages">
+                  {chatMessages.length===0&&<div style={{textAlign:'center',color:C.textMuted,fontSize:13,marginTop:20,padding:'0 16px'}}>Nenhuma mensagem ainda. Seja o primeiro! 💬</div>}
+                  {chatMessages.map((m:any)=>{
+                    const isMe = m.user===currentUser
+                    const CHAT_EMOJIS = ['🏆','🔥','🤬','🤡','🥱','👀','👎','👍','🖕','🍆']
+                    const hasReactions = m.reactions && Object.values(m.reactions).some((v:any)=>v.length>0)
+                    return (
+                      <div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',marginBottom:2}}>
+                        {!isMe&&<span style={{fontSize:10,color:C.textMuted,marginBottom:2,marginLeft:6}}>{m.user}</span>}
+                        {/* Bolha com long-press para reagir */}
+                        <div style={{position:'relative',maxWidth:'80%'}}>
+                          <div className={`chat-bubble ${isMe?'mine':'other'}`}
+                            onContextMenu={e=>{e.preventDefault();}}
+                          >{m.text}</div>
+                          {/* Reações embaixo da bolha */}
+                          {hasReactions&&(
+                            <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:3,justifyContent:isMe?'flex-end':'flex-start'}}>
+                              {CHAT_EMOJIS.map(emoji=>{
+                                const users: string[] = m.reactions?.[emoji]||[]
+                                if(!users.length) return null
+                                const isMine = users.includes(currentUser||'')
+                                return (
+                                  <button key={emoji} onClick={()=>toggleChatReaction(m.id,emoji)}
+                                    style={{background:isMine?'rgba(212,175,55,.2)':dm?'rgba(255,255,255,.08)':'rgba(0,0,0,.06)',
+                                      border:`1px solid ${isMine?C.gold:C.borderFaint}`,borderRadius:12,
+                                      padding:'2px 6px',fontSize:12,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:2}}>
+                                    {emoji}<span style={{fontSize:10,color:isMine?C.gold:C.textMuted}}>{users.length}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                          {/* Botão de + reação */}
+                          <div style={{display:'flex',gap:3,marginTop:3,justifyContent:isMe?'flex-end':'flex-start',flexWrap:'wrap'}}>
+                            {['🔥','🤡','👍','🤬','😂'].map(emoji=>(
+                              <button key={emoji} onClick={()=>toggleChatReaction(m.id,emoji)}
+                                style={{background:'transparent',border:`1px solid ${C.borderFaint}`,borderRadius:10,
+                                  padding:'1px 5px',fontSize:11,cursor:'pointer',opacity:0.5,transition:'opacity .15s'}}
+                                onMouseEnter={e=>(e.currentTarget.style.opacity='1')}
+                                onMouseLeave={e=>(e.currentTarget.style.opacity='0.5')}
+                              >{emoji}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <span style={{fontSize:9,color:C.textSub,marginTop:1,marginLeft:6,marginRight:6}}>
+                          {new Date(m.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  <div ref={chatEndRef}/>
+                </div>
+                <div className="chat-input-row" style={{padding:'8px 12px 12px'}}>
+                  <input
+                    className="a-in lg"
+                    style={{flex:1,fontSize:14}}
+                    value={chatMsg}
+                    onChange={e=>setChatMsg(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&sendChatMsg()}
+                    placeholder="Manda ver... 🔥"
+                    maxLength={200}
+                  />
+                  <button className="btn-sm btn-gold" onClick={sendChatMsg} disabled={!chatMsg.trim()}>Enviar</button>
+                </div>
+              </div>
+            </div>
+          </div>}
+
           {/* ── GUIA ── */}
           {activeTab==='guia'&&<GuiaTab C={C} dm={dm} state={state} guideTextStyle={guideTextStyle} guideTipStyle={guideTipStyle} guideHighlight={guideHighlight} requestPushPermission={requestPushPermission} pushStatus={pushStatus}/>}
+
+          {/* ── Modal Comparativo Frente a Frente ── */}
+          {compareTarget && compareTarget !== currentUser && (
+            <div className="modal-overlay open" onClick={()=>setCompareTarget(null)}>
+              <div className="modal" style={{maxWidth:420,width:'95%'}} onClick={e=>e.stopPropagation()}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                  <h3 style={{fontSize:18}}>⚔️ Frente a Frente</h3>
+                  <button onClick={()=>setCompareTarget(null)} style={{background:'transparent',border:'none',color:C.textMuted,fontSize:20,cursor:'pointer'}}>✕</button>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:8,marginBottom:14,textAlign:'center'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:600,color:C.gold}}>{currentUser}</div>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:14,color:C.textMuted}}>VS</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:600,color:'#3498db'}}>{compareTarget}</div>
+                </div>
+                {state.round.matches.map((m:any)=>{
+                  const myPal  = state.palpites[currentUser!]?.[m.id]
+                  const hisPal = state.palpites[compareTarget]?.[m.id]
+                  const res    = state.results[m.id]
+                  const hasRes = res&&res.h!==''&&res.a!==''
+
+                  function palResult(pal:any) {
+                    if(!pal||pal.h==='') return {label:'—', color:C.textSub}
+                    if(!hasRes) return {label:`${pal.h}×${pal.a}`, color:C.text}
+                    const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a)
+                    if(ph===rh&&pa===ra) return {label:`${pal.h}×${pal.a} ✅`, color:'#00c060'}
+                    const pw=ph>pa?1:ph<pa?-1:0, rw=rh>ra?1:rh<ra?-1:0
+                    if((ph-pa)===(rh-ra)) return {label:`${pal.h}×${pal.a} 📐`, color:C.gold}
+                    if(pw===rw) return {label:`${pal.h}×${pal.a} 👍`, color:'#3498db'}
+                    return {label:`${pal.h}×${pal.a} ❌`, color:C.red}
+                  }
+
+                  const my  = palResult(myPal)
+                  const his = palResult(hisPal)
+
+                  return (
+                    <div key={m.id} style={{borderBottom:`1px solid ${C.borderFaint}`,paddingBottom:10,marginBottom:10}}>
+                      <div style={{fontSize:11,color:C.textMuted,textAlign:'center',marginBottom:6}}>
+                        {m.homeFlag} {m.home} × {m.away} {m.awayFlag}
+                        {hasRes&&<span style={{marginLeft:6,color:C.gold,fontFamily:"'Bebas Neue',sans-serif"}}>{res.h}×{res.a}</span>}
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:8,textAlign:'center'}}>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:my.color}}>{my.label}</span>
+                        <span style={{color:C.textSub,fontSize:12}}>×</span>
+                        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:his.color}}>{his.label}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {state.round.matches.length===0&&<div style={{color:C.textMuted,fontSize:13,textAlign:'center',padding:'10px 0'}}>Nenhum jogo nesta rodada.</div>}
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto 1fr',gap:8,textAlign:'center',marginTop:8,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                  <div>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.gold}}>{Object.values(state.correctedScores[currentUser!]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number}</div>
+                    <div style={{fontSize:10,color:C.textMuted}}>pts rodada</div>
+                  </div>
+                  <div style={{color:C.textSub}}>VS</div>
+                  <div>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:'#3498db'}}>{Object.values(state.correctedScores[compareTarget]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number}</div>
+                    <div style={{fontSize:10,color:C.textMuted}}>pts rodada</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ── ADMIN ── */}
           {activeTab==='admin'&&isAdmin&&<div>
@@ -1479,6 +1830,101 @@ export default function Home() {
                 <div style={{marginTop:10,fontSize:11,color:C.textMuted,lineHeight:1.5}}>
                   A mensagem incluirá o top 5 e o link do AppWeb.
                 </div>
+              </div>
+            </div>
+
+            {/* Configuração de Projeção */}
+            <div style={{marginBottom:24}}>
+              <div className="section-title">🔮 Projeção de Campeão</div>
+              <div className="a-card">
+                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                  Define quantas rodadas usar para calcular a projeção (%) na tabela de ranking.
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Janela:</span>
+                  <select className="a-sel" value={projWindow} onChange={e=>setProjWindow(Number(e.target.value))}>
+                    <option value={2}>Últimas 2 rodadas</option>
+                    <option value={3}>Últimas 3 rodadas</option>
+                    <option value={5}>Últimas 5 rodadas</option>
+                    <option value={10}>Últimas 10 rodadas</option>
+                    <option value={0}>Campeonato inteiro</option>
+                  </select>
+                </div>
+                <div style={{fontSize:11,color:C.textMuted,marginTop:6,lineHeight:1.5}}>
+                  ⚠ Requer mínimo de 2 rodadas finalizadas. Com menos de 2, aparece "—" na tabela.
+                </div>
+              </div>
+            </div>
+
+            {/* Importar Jogos via API */}
+            <div style={{marginBottom:24}}>
+              <div className="section-title">⚽ Importar Jogos</div>
+              <div className="a-card">
+                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.6}}>
+                  Busca jogos direto da <b style={{color:C.gold}}>API-Football</b>. Preencha sua chave gratuita em <a href="https://api-football.com" target="_blank" style={{color:C.gold}}>api-football.com</a>.
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Chave API:</span>
+                  <input className="a-in lg" type="password" value={importBuf.apiKey} onChange={e=>setImportBuf(b=>({...b,apiKey:e.target.value}))} placeholder="sua-chave-aqui"/>
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Liga:</span>
+                  <select className="a-sel" value={importBuf.league} onChange={e=>setImportBuf(b=>({...b,league:e.target.value}))}>
+                    <option value="">Selecione...</option>
+                    <option value="1">Copa do Mundo</option>
+                    <option value="71">Brasileirão Série A</option>
+                    <option value="72">Brasileirão Série B</option>
+                    <option value="13">Copa Libertadores</option>
+                    <option value="11">Copa Sul-Americana</option>
+                    <option value="2">Champions League</option>
+                    <option value="3">Europa League</option>
+                  </select>
+                  <span className="a-lbl">Temporada:</span>
+                  <input className="a-in" style={{width:70}} value={importBuf.season} onChange={e=>setImportBuf(b=>({...b,season:e.target.value}))} placeholder="2026"/>
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Rodada:</span>
+                  <input className="a-in lg" value={importBuf.round} onChange={e=>setImportBuf(b=>({...b,round:e.target.value}))} placeholder="ex: Regular Season - 1  ou  Group Stage - 1"/>
+                </div>
+                <button className="btn-sm btn-gold" onClick={fetchImportJogos} disabled={importLoading||!importBuf.apiKey||!importBuf.league||!importBuf.round} style={{marginTop:4}}>
+                  {importLoading?'Buscando...':'🔍 Buscar Jogos'}
+                </button>
+
+                {/* Resultados da busca */}
+                {importResults.length > 0 && (
+                  <div style={{marginTop:14}}>
+                    <div style={{fontSize:12,fontWeight:600,color:C.gold,letterSpacing:1,marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif"}}>
+                      {importResults.length} JOGO(S) ENCONTRADO(S) — selecione os que deseja importar:
+                    </div>
+                    {importResults.map((g:any)=>{
+                      const sel = importSelected.includes(g.id)
+                      return (
+                        <div key={g.id} onClick={()=>setImportSelected(prev=>sel?prev.filter(x=>x!==g.id):[...prev,g.id])}
+                          style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',marginBottom:6,
+                            background:sel?'rgba(212,175,55,.1)':'transparent',
+                            border:`1px solid ${sel?C.gold:C.borderFaint}`,
+                            borderRadius:6,cursor:'pointer',transition:'all .15s'}}>
+                          <span style={{fontSize:16}}>{sel?'✅':'⬜'}</span>
+                          {g.homeLogo&&<img src={g.homeLogo} alt="" style={{width:20,height:20,objectFit:'contain'}}/>}
+                          {!g.homeLogo&&<span style={{fontSize:16}}>{g.homeFlag||'🏳'}</span>}
+                          <span style={{flex:1,fontSize:13,fontWeight:600}}>{g.home}</span>
+                          <span style={{fontSize:11,color:C.textMuted}}>×</span>
+                          <span style={{flex:1,fontSize:13,fontWeight:600,textAlign:'right'}}>{g.away}</span>
+                          {g.awayLogo&&<img src={g.awayLogo} alt="" style={{width:20,height:20,objectFit:'contain'}}/>}
+                          {!g.awayLogo&&<span style={{fontSize:16}}>{g.awayFlag||'🏳'}</span>}
+                          <span style={{fontSize:11,color:C.textMuted,minWidth:80,textAlign:'right'}}>{g.date} {g.time}</span>
+                        </div>
+                      )
+                    })}
+                    <div style={{display:'flex',gap:10,marginTop:10,alignItems:'center',flexWrap:'wrap'}}>
+                      <button className="btn-sm btn-gold" onClick={applyImportJogos} disabled={!importSelected.length}>
+                        ✅ Importar {importSelected.length} jogo(s)
+                      </button>
+                      <button className="btn-sm btn-outline" onClick={()=>setImportSelected(importResults.map(g=>g.id))}>Selecionar todos</button>
+                      <button className="btn-sm btn-outline" onClick={()=>setImportSelected([])}>Desmarcar todos</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1827,6 +2273,61 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
           <GuiaStep n={1} text="Maior número de placares exatos acertados (ex: acertou 2x1 quando o resultado foi 2x1)"/>
           <GuiaStep n={2} text="Maior número de resultados corretos (vencedor ou empate, independente do placar)"/>
           <GuiaStep n={3} text="Pedra, papel e tesoura ✂️ — pode o melhor vencer!"/>
+        </div>
+      </GuiaItem>
+
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>🏆 Ranking & Estatísticas</div>
+
+      <GuiaItem title="Como funciona o Ranking?" icon="🏆">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:10}}>O ranking acumula pontos de todas as rodadas finalizadas. As colunas da tabela:</p>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:8,marginBottom:12}}>
+            {[
+              {col:'Pontos',      desc:'Total acumulado de todas as rodadas.',                                                                   color:'#D4AF37'},
+              {col:'Exatos',      desc:'Quantas vezes acertou o placar exato (ex: palpitou 2x1, resultado foi 2x1).',                          color:'#00c060'},
+              {col:'Vencedor',    desc:'Quantas vezes acertou quem venceu ou empate, mesmo sem acertar o placar.',                              color:'#3498db'},
+              {col:'Saldo',       desc:'Quantas vezes acertou a diferença de gols sem acertar o placar exato.',                                 color:'#e67e22'},
+              {col:'Projeção %',  desc:'Chance estimada de ser campeão baseada na média recente. Requer ao menos 2 rodadas finalizadas.',       color:'#9b59b6'},
+            ].map(({col,desc,color})=>(
+              <div key={col} style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                <span style={{background:`${color}22`,color,border:`1px solid ${color}44`,borderRadius:4,padding:'2px 8px',fontSize:11,fontWeight:700,minWidth:82,textAlign:'center' as const,flexShrink:0}}>{col}</span>
+                <span style={{fontSize:13,color:C.text,lineHeight:1.5}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+          <div style={guideTipStyle}>
+            ⚖️ <b>Desempate:</b> Exatos → Vencedor → Saldo
+          </div>
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="Como funciona o Comparativo Frente a Frente?" icon="⚔️">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:8}}>Na aba <b style={guideHighlight}>Ranking</b>, toque em qualquer participante para ver seus palpites comparados lado a lado.</p>
+          <p>Antes do admin lançar o resultado, você só vê seus próprios palpites — os do outro ficam ocultos até o resultado ser publicado.</p>
+        </div>
+      </GuiaItem>
+
+      <GuiaItem title="O que são as Conquistas?" icon="🏅">
+        <div style={guideTextStyle}>
+          <p style={{marginBottom:10}}>Conquistas aparecem nas suas Estatísticas Pessoais (final da aba Ranking) conforme você evolui:</p>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:6}}>
+            {[
+              {icon:'🎯', label:'Sniper',      desc:'1+ placar exato acertado'},
+              {icon:'🔥', label:'Em Chamas',   desc:'5+ placares exatos acertados'},
+              {icon:'💪', label:'Veterano',    desc:'Participou de 3+ rodadas'},
+              {icon:'⚡', label:'Consistente', desc:'10+ vencedores acertados'},
+              {icon:'📐', label:'Calculista',  desc:'5+ saldos de gols acertados'},
+            ].map(({icon,label,desc})=>(
+              <div key={label} style={{display:'flex',alignItems:'center',gap:8,padding:'4px 0'}}>
+                <span style={{fontSize:20}}>{icon}</span>
+                <div>
+                  <span style={{fontSize:12,fontWeight:600,color:C.gold}}>{label}</span>
+                  <span style={{fontSize:12,color:C.textMuted,marginLeft:6}}>{desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </GuiaItem>
 

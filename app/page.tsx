@@ -154,6 +154,7 @@ function defaultState(): any {
     scoringPhases:defaultScoringPhases(),
     multipliers:defaultMultipliers(),
     novidades:[] as any[],
+    admins:[] as any[],
   }
 }
 
@@ -508,6 +509,7 @@ export default function Home() {
   const [showNovidade, setShowNovidade] = useState(false)
   const [novidadeAtual, setNovidadeAtual] = useState<any>(null)
   const [novidadeBuf, setNovidadeBuf] = useState({titulo:'', resumo:''})
+  const [adminsBuf, setAdminsBuf] = useState<any[]>([])
   const [notifTitle, setNotifTitle] = useState('')
   const [notifMsg, setNotifMsg] = useState('')
   const [notifSending, setNotifSending] = useState(false)
@@ -549,6 +551,7 @@ export default function Home() {
       if(!s.results) s.results={}
       if(!s.multipliers) s.multipliers=defaultMultipliers()
       if(!s.novidades) s.novidades=[]
+      if(!s.admins) s.admins=[]
       if(s.round?.matches) {
         s.round.matches = s.round.matches.map((m:any)=>({
           date: m.date ?? '',
@@ -627,6 +630,7 @@ export default function Home() {
       setScoringPhases(JSON.parse(JSON.stringify(state.scoringPhases)))
       setMultipliersBuf(JSON.parse(JSON.stringify(state.multipliers||defaultMultipliers())))
       setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl); setShameText(state.shame.text||'')
+      setAdminsBuf(JSON.parse(JSON.stringify(state.admins||[])))
       const ri:any={}; const er:any={}
       state.round.matches.forEach((m:any)=>{
         ri[m.id]=state.results[m.id]||{h:'',a:''}
@@ -787,6 +791,13 @@ export default function Home() {
     const newState=JSON.parse(JSON.stringify(state))
     newState.scoringPhases=scoringPhases; newState.multipliers=multipliersBuf
     await saveState(newState, authPassword); showNotif('Pontuação salva!')
+  }
+
+  async function saveAdmins() {
+    if(!state) return
+    const newState=JSON.parse(JSON.stringify(state))
+    newState.admins=adminsBuf
+    await saveState(newState, authPassword); showNotif('Admins salvos!')
   }
 
   async function saveShame() {
@@ -1633,95 +1644,6 @@ export default function Home() {
                 Último: {new Date(state.palpiteTimes[currentUser!]).toLocaleString('pt-BR')}
               </span>}
             </div>}
-
-            {/* ── Mini Chat dentro dos Palpites ── */}
-            <div style={{marginTop:24}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10,flexWrap:'wrap',gap:8}}>
-                <div className="section-title" style={{marginBottom:0,fontSize:18}}>💬 Chat da Rodada</div>
-                {isAdmin&&<button className="btn-sm btn-danger" style={{fontSize:11,padding:'5px 12px'}} onClick={clearChat}>🗑 Limpar</button>}
-              </div>
-              <div className="card" style={{padding:0,overflow:'hidden'}}>
-                <div className="chat-wrap">
-                  <div className="chat-messages">
-                    {chatMessages.length===0&&<div style={{textAlign:'center',color:C.textMuted,fontSize:13,marginTop:20,padding:'0 16px'}}>Nenhuma mensagem ainda. Seja o primeiro! 💬</div>}
-                    {chatMessages.map((m:any)=>{
-                      const isMe = m.user===currentUser
-                      const CHAT_EMOJIS = ['🤣','👍','🤬','🤡','🖕']
-                      const hasReactions = m.reactions && Object.values(m.reactions).some((v:any)=>(v as any[]).length>0)
-                      const [showEmojiPicker, setShowEmojiPicker] = useState<string|null>(null)
-                      return (
-                        <div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',marginBottom:6}}>
-                          {!isMe&&<span style={{fontSize:10,color:C.textMuted,marginBottom:2,marginLeft:6}}>{m.user}</span>}
-                          <div style={{position:'relative',maxWidth:'80%'}}>
-                            {/* Seletor de emoji ao pressionar */}
-                            {showEmojiPicker===m.id&&(
-                              <div style={{position:'absolute',bottom:'110%',left:isMe?'auto':'0',right:isMe?'0':'auto',
-                                background:dm?'rgba(0,30,15,.98)':'white',border:`1px solid ${C.border}`,
-                                borderRadius:20,padding:'6px 10px',display:'flex',gap:6,zIndex:100,
-                                boxShadow:'0 4px 20px rgba(0,0,0,.4)'}}>
-                                {CHAT_EMOJIS.map(emoji=>(
-                                  <button key={emoji} onClick={()=>{toggleChatReaction(m.id,emoji);setShowEmojiPicker(null)}}
-                                    style={{background:'transparent',border:'none',fontSize:22,cursor:'pointer',padding:'2px 4px',
-                                      borderRadius:6,transition:'transform .1s'}}
-                                    onMouseEnter={e=>(e.currentTarget.style.transform='scale(1.3)')}
-                                    onMouseLeave={e=>(e.currentTarget.style.transform='scale(1)')}
-                                  >{emoji}</button>
-                                ))}
-                              </div>
-                            )}
-                            <div
-                              className={`chat-bubble ${isMe?'mine':'other'}`}
-                              onContextMenu={e=>{e.preventDefault();setShowEmojiPicker(showEmojiPicker===m.id?null:m.id)}}
-                              onTouchStart={(e)=>{
-                                const timer = setTimeout(()=>setShowEmojiPicker(v=>v===m.id?null:m.id), 500)
-                                e.currentTarget.dataset.timer = String(timer)
-                              }}
-                              onTouchEnd={e=>{ clearTimeout(Number(e.currentTarget.dataset.timer)) }}
-                              onTouchMove={e=>{ clearTimeout(Number(e.currentTarget.dataset.timer)) }}
-                              style={{userSelect:'none'}}
-                            >{m.text}</div>
-                            {/* Reações embaixo da bolha */}
-                            {hasReactions&&(
-                              <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:3,justifyContent:isMe?'flex-end':'flex-start'}}>
-                                {CHAT_EMOJIS.map(emoji=>{
-                                  const users: string[] = m.reactions?.[emoji]||[]
-                                  if(!users.length) return null
-                                  const isMine = users.includes(currentUser||'')
-                                  return (
-                                    <button key={emoji} onClick={()=>toggleChatReaction(m.id,emoji)}
-                                      style={{background:isMine?'rgba(212,175,55,.2)':dm?'rgba(255,255,255,.08)':'rgba(0,0,0,.06)',
-                                        border:`1px solid ${isMine?C.gold:C.borderFaint}`,borderRadius:12,
-                                        padding:'2px 7px',fontSize:13,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:3}}>
-                                      {emoji}<span style={{fontSize:10,color:isMine?C.gold:C.textMuted}}>{users.length}</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <span style={{fontSize:9,color:C.textSub,marginTop:1,marginLeft:6,marginRight:6}}>
-                            {new Date(m.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
-                          </span>
-                        </div>
-                      )
-                    })}
-                    <div ref={chatEndRef}/>
-                  </div>
-                  <div className="chat-input-row" style={{padding:'8px 12px 12px'}}>
-                    <input
-                      className="a-in lg"
-                      style={{flex:1,fontSize:16}}
-                      value={chatMsg}
-                      onChange={e=>setChatMsg(e.target.value)}
-                      onKeyDown={e=>e.key==='Enter'&&sendChatMsg()}
-                      placeholder="Manda ver... 🔥"
-                      maxLength={200}
-                    />
-                    <button className="btn-sm btn-gold" onClick={sendChatMsg} disabled={!chatMsg.trim()}>Enviar</button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>}
 
           {/* ── GERAL ── */}
@@ -2286,6 +2208,44 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Conheça os Adms */}
+            <div style={{marginBottom:24}}>
+              <div className="section-title">Conheça os Adms</div>
+              <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                Esses dados aparecem na aba Guia para todos os participantes.
+              </div>
+              {adminsBuf.map((adm:any, idx:number)=>(
+                <div key={adm.id} className="a-card" style={{marginBottom:12}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <span style={{fontFamily:"'Bebas Neue'",fontSize:13,color:C.gold,letterSpacing:1}}>ADM {idx+1}</span>
+                    <button className="rm-btn" onClick={()=>setAdminsBuf(b=>b.filter((_:any,i:number)=>i!==idx))}>Remover</button>
+                  </div>
+                  <div className="a-row">
+                    <span className="a-lbl">Nome:</span>
+                    <input className="a-in lg" value={adm.nome||''} placeholder="Nome completo" onChange={e=>setAdminsBuf(b=>b.map((x:any,i:number)=>i===idx?{...x,nome:e.target.value}:x))}/>
+                  </div>
+                  <div className="a-row">
+                    <span className="a-lbl">Vulgo:</span>
+                    <input className="a-in lg" value={adm.vulgo||''} placeholder="Apelido zueiro..." onChange={e=>setAdminsBuf(b=>b.map((x:any,i:number)=>i===idx?{...x,vulgo:e.target.value}:x))}/>
+                  </div>
+                  <div className="a-row">
+                    <span className="a-lbl">Foto URL:</span>
+                    <input className="a-in lg" value={adm.foto||''} placeholder="https://..." onChange={e=>setAdminsBuf(b=>b.map((x:any,i:number)=>i===idx?{...x,foto:e.target.value}:x))}/>
+                  </div>
+                  <div className="a-row" style={{alignItems:'flex-start'}}>
+                    <span className="a-lbl" style={{paddingTop:6}}>Descrição:</span>
+                    <textarea value={adm.descricao||''} onChange={e=>setAdminsBuf(b=>b.map((x:any,i:number)=>i===idx?{...x,descricao:e.target.value}:x))}
+                      placeholder="Textinho zueiro sobre esse adm..." rows={3}
+                      style={{flex:1,background:C.bgInput,border:`1px solid ${dm?'rgba(212,175,55,.25)':C.border}`,color:C.text,fontSize:13,padding:'7px 12px',borderRadius:5,outline:'none',resize:'vertical',fontFamily:'inherit',lineHeight:1.4}}/>
+                  </div>
+                </div>
+              ))}
+              <div style={{display:'flex',gap:8,marginTop:4}}>
+                <button className="add-btn" onClick={()=>setAdminsBuf(b=>[...b,{id:'adm_'+Date.now(),nome:'',vulgo:'',foto:'',descricao:''}])}>+ Adicionar Adm</button>
+                <button className="btn-sm btn-gold" onClick={saveAdmins}>💾 Salvar Adms</button>
+              </div>
+            </div>
+
             {/* Notificação Push */}
             <div style={{marginBottom:24}}>
               <div className="section-title">Enviar Notificação Push</div>
@@ -2374,6 +2334,7 @@ export default function Home() {
 // ── ABA GUIA ────────────────────────────────────────────────────────────────
 function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, requestPushPermission, pushStatus }: any) {
   const [osTab, setOsTab] = useState<'android'|'iphone'>('android')
+  const admins: any[] = state?.admins || []
 
   return (
     <div>
@@ -2381,6 +2342,29 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
         <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:4,color:C.gold,marginBottom:6}}>📖 GUIA DO PALPITÃO</div>
         <div style={{fontSize:13,color:C.textMuted,lineHeight:1.5}}>Tudo que você precisa saber para palpitar, pontuar e ganhar 🏆</div>
       </div>
+
+      {/* ── Conheça os Adms ── */}
+      {admins.length > 0 && (
+        <div style={{marginBottom:24}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:16}}>👑 Conheça os Adms</div>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:14}}>
+            {admins.map((adm:any)=>(
+              <div key={adm.id} style={{background:dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.06)',border:`1px solid ${C.border}`,borderRadius:10,overflow:'hidden'}}>
+                {adm.foto && (
+                  <img src={adm.foto} alt={adm.nome} style={{width:'100%',maxHeight:220,objectFit:'cover',display:'block'}}/>
+                )}
+                <div style={{padding:'14px 16px'}}>
+                  <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap' as const,marginBottom:6}}>
+                    <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:C.gold,letterSpacing:2}}>{adm.nome||'—'}</span>
+                    {adm.vulgo && <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,color:C.textMuted,letterSpacing:1}}>"{adm.vulgo}"</span>}
+                  </div>
+                  {adm.descricao && <p style={{fontSize:13,color:C.text,lineHeight:1.6,margin:0}}>{adm.descricao}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>⚽ Pontuação</div>
 

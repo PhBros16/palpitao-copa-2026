@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body style={{margin:0,padding:0}}>
         {children}
         <Script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer strategy="afterInteractive"/>
-        <Script id="onesignal-init" strategy="afterInteractive">{`
+        <Script id="onesignal-init" strategy="afterInteractive" dangerouslySetInnerHTML={{__html: `
           window.OneSignalDeferred = window.OneSignalDeferred || [];
           OneSignalDeferred.push(async function(OneSignal) {
             await OneSignal.init({
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               allowLocalhostAsSecureOrigin: true,
             });
           });
-        \`}</Script>
+        `}}/>
       </body>
     </html>
   )

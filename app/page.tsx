@@ -144,7 +144,7 @@ function defaultMultipliers() {
 function defaultState(): any {
   return {
     adminPass:'Copa2026!',
-    round:{ name:'Fase de Grupos - Rodada 1', phase:'grupos', matches:defaultMatches() },
+    round:{ name:'Fase de Grupos - Rodada 1', phase:'grupos', number:1, matches:defaultMatches() },
     palpitesOpen:true,
     palpites:{}, palpiteTimes:{}, results:{},
     correctedScores:{}, totalPoints:{},
@@ -558,7 +558,7 @@ export default function Home() {
           ...m
         }))
       } else {
-        s.round = s.round || { name:'', phase:'grupos', matches:[] }
+        s.round = s.round || { name:'', phase:'grupos', number:1, matches:[] }
       }
       setState(s)
 
@@ -623,7 +623,7 @@ export default function Home() {
     if(adminPassInput===MASTER_PASS||adminPassInput===state.adminPass) {
       setAuthPassword(adminPassInput); setCurrentUser('Administração'); setIsAdmin(true)
       setShowModal(false); setAdminPassInput(''); setModalError(''); setActiveTab('home')
-      setAdminBuf({ name:state.round.name, phase:state.round.phase, open:state.palpitesOpen, matches:JSON.parse(JSON.stringify(state.round.matches)) })
+      setAdminBuf({ name:state.round.name, phase:state.round.phase, number:state.round.number||1, open:state.palpitesOpen, matches:JSON.parse(JSON.stringify(state.round.matches)) })
       setScoringPhases(JSON.parse(JSON.stringify(state.scoringPhases)))
       setMultipliersBuf(JSON.parse(JSON.stringify(state.multipliers||defaultMultipliers())))
       setShamePlayer(state.shame.player); setShameUrl(state.shame.photoUrl); setShameText(state.shame.text||'')
@@ -688,7 +688,7 @@ export default function Home() {
   async function saveRoundConfig() {
     if(!state) return
     const newState = JSON.parse(JSON.stringify(state))
-    newState.round.name=adminBuf.name; newState.round.phase=adminBuf.phase
+    newState.round.name=adminBuf.name; newState.round.phase=adminBuf.phase; newState.round.number=adminBuf.number||1
     newState.palpitesOpen=adminBuf.open; newState.round.matches=adminBuf.matches
     newState.roundFinalized=false
     await saveState(newState, authPassword)
@@ -898,18 +898,9 @@ export default function Home() {
   // ── Chat via Supabase ────────────────────────────────────────────────────
   const fetchChat = useCallback(async (roundName: string) => {
     try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const { data } = await sb
-        .from('chat_messages')
-        .select('*')
-        .eq('round', roundName || 'geral')
-        .order('ts', { ascending: true })
-        .limit(200)
-      if(data) setChatMessages(data)
+      const res = await fetch(`/api/chat?round=${encodeURIComponent(roundName||'geral')}`)
+      const json = await res.json()
+      if(json.messages) setChatMessages(json.messages)
     } catch {}
   }, [])
 
@@ -930,49 +921,43 @@ export default function Home() {
     const text = chatMsg.trim()
     setChatMsg('')
     try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const { data } = await sb.from('chat_messages').insert({
-        user: currentUser,
-        text,
-        round: state.round?.name || 'geral',
-        reactions: {}
-      }).select().single()
-      if(data) setChatMessages(prev=>[...prev, data])
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ user: currentUser, text, round: state.round?.name||'geral' })
+      })
+      const json = await res.json()
+      if(json.message) setChatMessages(prev=>[...prev, json.message])
     } catch {}
   }
 
   async function toggleChatReaction(msgId: string, emoji: string) {
     if(!currentUser) return
+    const msg = chatMessages.find((m:any)=>m.id===msgId)
+    if(!msg) return
+    const cur: string[] = msg.reactions?.[emoji] || []
+    const already = cur.includes(currentUser)
+    const updated = already ? cur.filter((u:string)=>u!==currentUser) : [...cur, currentUser]
+    const newReactions = {...msg.reactions, [emoji]: updated}
+    // Otimista: atualiza local primeiro
+    setChatMessages(prev=>prev.map((m:any)=>m.id===msgId?{...m,reactions:newReactions}:m))
     try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      const msg = chatMessages.find((m:any)=>m.id===msgId)
-      if(!msg) return
-      const cur: string[] = msg.reactions?.[emoji] || []
-      const already = cur.includes(currentUser)
-      const updated = already ? cur.filter((u:string)=>u!==currentUser) : [...cur, currentUser]
-      const newReactions = {...msg.reactions, [emoji]: updated}
-      await sb.from('chat_messages').update({ reactions: newReactions }).eq('id', msgId)
-      setChatMessages(prev=>prev.map((m:any)=>m.id===msgId?{...m,reactions:newReactions}:m))
+      await fetch('/api/chat', {
+        method: 'PATCH',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id: msgId, reactions: newReactions })
+      })
     } catch {}
   }
 
   async function clearChat() {
     if(!state||!confirm('Limpar todo o chat desta rodada?')) return
     try {
-      const { createClient } = await import('@supabase/supabase-js')
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
-      await sb.from('chat_messages').delete().eq('round', state.round?.name || 'geral')
+      await fetch(`/api/chat?round=${encodeURIComponent(state.round?.name||'geral')}`, {
+        method: 'DELETE',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ password: authPassword||MASTER_PASS })
+      })
       setChatMessages([])
       showNotif('Chat limpo!')
     } catch { showNotif('Erro ao limpar chat','error') }
@@ -1146,7 +1131,7 @@ export default function Home() {
         .match-card{background:${C.bgMatchCard};border:1px solid ${C.borderFaint};border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;box-shadow:${C.shadow};}
         .match-card.locked{opacity:.65;border-color:${dm?'rgba(192,57,43,.3)':'rgba(192,57,43,.4)'};}
         .match-teams{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;}
-        .team-flag{font-size:24px;}.team-name{font-size:15px;font-weight:600;color:${C.text};}.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold);}
+        .team-flag{font-size:28px;}.team-name{font-size:17px;font-weight:700;color:${C.text};}.vs-txt{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold);}
         .score-grp{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;}
         .score-in{width:56px;height:56px;background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:${C.text};font-family:'Bebas Neue',sans-serif;font-size:26px;text-align:center;border-radius:6px;outline:none;}
         .score-in:focus{border-color:var(--gold);}
@@ -1331,7 +1316,7 @@ export default function Home() {
           </div>
 
           <div className="tabs-nav">
-            {['home','palpites','geral','ranking','historico','guia'].map(t=>{
+            {['home','palpites','chat','geral','ranking','historico','guia'].map(t=>{
               const hasNovidade = t==='home' && (()=>{
                 const novs: any[] = state.novidades||[]
                 if(!novs.length) return false
@@ -1341,7 +1326,7 @@ export default function Home() {
 
               return (
                 <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)} style={{position:'relative'}}>
-                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
+                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='chat'?'💬 Chat':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
                   {hasNovidade && <span style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'#e74c3c',border:'1px solid rgba(0,0,0,.3)'}}/>}
                 </button>
               )
@@ -1387,12 +1372,74 @@ export default function Home() {
               ):null
             })()}
 
-            <div className="grid-4" style={{marginBottom:20}}>
-              <div className="stat-card"><div className="stat-value">{state.round.name.split('-').pop()?.trim()||state.round.name||'—'}</div><div className="stat-label">Rodada</div></div>
-              <div className="stat-card"><div className="stat-value">{state.round.matches.length}</div><div className="stat-label">Jogos</div></div>
-              <div className="stat-card"><div className="stat-value">{palpitaramCount}/{PLAYERS.length}</div><div className="stat-label">Palpitaram</div></div>
-              <div className="stat-card"><div className="stat-value" style={{fontSize:sorted[0]?.name.length>8?18:34}}>{sorted[0]?.name.split(' ').slice(0,2).join(' ')||'—'}</div><div className="stat-label">Líder</div></div>
-            </div>
+            {/* ── Stats card mobile-first ── */}
+            {(()=>{
+              const myPos = !isAdmin ? sorted.findIndex((d:any)=>d.name===currentUser) : -1
+              const myTotal = !isAdmin ? (state.totalPoints[currentUser!]||0) : 0
+              const myRoundPts = !isAdmin ? (Object.values(state.correctedScores[currentUser!]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number) : 0
+              const ptsParaSubir = myPos > 0 ? (sorted[myPos-1]?.total||0) - myTotal : 0
+              const jogosRestantes = state.round.matches.filter((_:any, idx:number) => !isMatchLocked(state.round.matches[idx], idx)).length
+              const proximoJogo = state.round.matches.reduce((closest:any, m:any, idx:number)=>{
+                const diff = getCountdownMs(m, idx)
+                if(diff > 0 && (closest === null || diff < getCountdownMs(closest.m, closest.idx)))
+                  return {m, idx}
+                return closest
+              }, null)
+              const proximoCountdown = proximoJogo ? getCountdown(proximoJogo.m, proximoJogo.idx) : null
+
+              return (
+                <div style={{background:dm?'linear-gradient(135deg,rgba(0,50,25,.7),rgba(0,30,60,.5))':'rgba(255,255,255,.9)',border:`1px solid ${C.border}`,borderRadius:12,padding:'18px 16px',marginBottom:20,boxShadow:C.shadow}}>
+                  {/* Nome + número da rodada */}
+                  <div style={{textAlign:'center',marginBottom:16}}>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:3,color:C.gold,lineHeight:1}}>
+                      {state.round.name||'—'}
+                    </div>
+                    {state.round.number && (
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,letterSpacing:2,color:C.textMuted,textTransform:'uppercase',marginTop:2}}>
+                        Rodada {state.round.number}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pontuação em destaque (só para participantes) */}
+                  {!isAdmin && (
+                    <div style={{textAlign:'center',background:dm?'rgba(212,175,55,.08)':'rgba(212,175,55,.1)',border:`1px solid rgba(212,175,55,.25)`,borderRadius:10,padding:'14px 12px',marginBottom:14}}>
+                      <div style={{fontSize:11,color:C.textMuted,letterSpacing:2,textTransform:'uppercase',marginBottom:4}}>Minha Pontuação</div>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:52,color:C.gold,lineHeight:1}}>{myTotal}</div>
+                      {myRoundPts > 0 && <div style={{fontSize:12,color:C.green,marginTop:2}}>+{myRoundPts} pts nesta rodada</div>}
+                      {myPos >= 0 && (
+                        <div style={{fontSize:12,color:C.textMuted,marginTop:4}}>
+                          {myPos === 0
+                            ? '🏆 Você é o líder!'
+                            : `${myPos+1}º lugar · ${ptsParaSubir} pts para subir`
+                          }
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info rápida */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.text,lineHeight:1}}>{state.round.matches.length}</div>
+                      <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Jogos</div>
+                    </div>
+                    <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
+                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:jogosRestantes>0?C.gold:C.red,lineHeight:1}}>{jogosRestantes}</div>
+                      <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Abertos</div>
+                    </div>
+                  </div>
+
+                  {/* Próximo jogo countdown */}
+                  {proximoCountdown && (
+                    <div style={{marginTop:10,textAlign:'center',fontSize:12,color:C.textMuted,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                      <span>⏱</span>
+                      <span>Próximo fecha em <b style={{color:Number(proximoCountdown.split('h')[0])<2?C.red:C.gold}}>{proximoCountdown}</b></span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="grid-2" style={{marginBottom:20}}>
               <div className="card">
@@ -1517,13 +1564,13 @@ export default function Home() {
               return <div key={m.id} className={`match-card${locked?' locked':''}`}>
                 <div className="match-teams">
                   {m.homeLogo
-                    ? <img src={m.homeLogo} alt={m.home} style={{width:28,height:28,objectFit:'contain'}}/>
+                    ? <img src={m.homeLogo} alt={m.home} style={{width:40,height:40,objectFit:'contain'}}/>
                     : <span className="team-flag">{m.homeFlag||'🏳'}</span>}
                   <span className="team-name">{m.home}</span>
                   <span className="vs-txt">x</span>
                   <span className="team-name">{m.away}</span>
                   {m.awayLogo
-                    ? <img src={m.awayLogo} alt={m.away} style={{width:28,height:28,objectFit:'contain'}}/>
+                    ? <img src={m.awayLogo} alt={m.away} style={{width:40,height:40,objectFit:'contain'}}/>
                     : <span className="team-flag">{m.awayFlag||'🏳'}</span>}
                 </div>
                 <div className="score-grp">
@@ -1819,6 +1866,82 @@ export default function Home() {
             ))}
           </div>}
 
+          {/* ── CHAT ── */}
+          {activeTab==='chat'&&<div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:4}}>
+              <div className="section-title" style={{marginBottom:0}}>💬 Chat da Rodada</div>
+              {isAdmin&&<button className="btn-sm btn-danger" style={{fontSize:11,padding:'5px 12px'}} onClick={clearChat}>🗑 Limpar</button>}
+            </div>
+            <div className="section-sub" style={{marginBottom:12}}>
+              Reaja, provoque, comemore 😄 · <span style={{color:C.textMuted}}>{state.round.name||'—'}</span>
+            </div>
+            <div className="card" style={{padding:0,overflow:'hidden'}}>
+              <div className="chat-wrap">
+                <div className="chat-messages">
+                  {chatMessages.length===0&&<div style={{textAlign:'center',color:C.textMuted,fontSize:13,marginTop:20,padding:'0 16px'}}>Nenhuma mensagem ainda. Seja o primeiro! 💬</div>}
+                  {chatMessages.map((m:any)=>{
+                    const isMe = m.user===currentUser
+                    const CHAT_EMOJIS = ['🤣','👍','🤬','🤡','🖕']
+                    const hasReactions = m.reactions && Object.values(m.reactions).some((v:any)=>(v as any[]).length>0)
+                    return (
+                      <div key={m.id} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',marginBottom:6}}>
+                        {!isMe&&<span style={{fontSize:10,color:C.textMuted,marginBottom:2,marginLeft:6}}>{m.user}</span>}
+                        <div style={{position:'relative',maxWidth:'80%'}}>
+                          <div className={`chat-bubble ${isMe?'mine':'other'}`}
+                            onContextMenu={e=>{e.preventDefault()}}
+                          >{m.text}</div>
+                          {hasReactions&&(
+                            <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:3,justifyContent:isMe?'flex-end':'flex-start'}}>
+                              {CHAT_EMOJIS.map(emoji=>{
+                                const users: string[] = m.reactions?.[emoji]||[]
+                                if(!users.length) return null
+                                const isMine = users.includes(currentUser||'')
+                                return (
+                                  <button key={emoji} onClick={()=>toggleChatReaction(m.id,emoji)}
+                                    style={{background:isMine?'rgba(212,175,55,.2)':dm?'rgba(255,255,255,.08)':'rgba(0,0,0,.06)',
+                                      border:`1px solid ${isMine?C.gold:C.borderFaint}`,borderRadius:12,
+                                      padding:'2px 7px',fontSize:13,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:3}}>
+                                    {emoji}<span style={{fontSize:10,color:isMine?C.gold:C.textMuted}}>{users.length}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                          <div style={{display:'flex',gap:3,marginTop:3,justifyContent:isMe?'flex-end':'flex-start'}}>
+                            {CHAT_EMOJIS.map(emoji=>(
+                              <button key={emoji} onClick={()=>toggleChatReaction(m.id,emoji)}
+                                style={{background:'transparent',border:`1px solid ${C.borderFaint}`,borderRadius:10,
+                                  padding:'1px 5px',fontSize:11,cursor:'pointer',opacity:0.45,transition:'opacity .15s'}}
+                                onMouseEnter={e=>(e.currentTarget.style.opacity='1')}
+                                onMouseLeave={e=>(e.currentTarget.style.opacity='0.45')}
+                              >{emoji}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <span style={{fontSize:9,color:C.textSub,marginTop:1,marginLeft:6,marginRight:6}}>
+                          {new Date(m.ts).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  <div ref={chatEndRef}/>
+                </div>
+                <div className="chat-input-row" style={{padding:'8px 12px 12px'}}>
+                  <input
+                    className="a-in lg"
+                    style={{flex:1,fontSize:16}}
+                    value={chatMsg}
+                    onChange={e=>setChatMsg(e.target.value)}
+                    onKeyDown={e=>e.key==='Enter'&&sendChatMsg()}
+                    placeholder="Manda ver... 🔥"
+                    maxLength={200}
+                  />
+                  <button className="btn-sm btn-gold" onClick={sendChatMsg} disabled={!chatMsg.trim()}>Enviar</button>
+                </div>
+              </div>
+            </div>
+          </div>}
+
           {/* ── GUIA ── */}
           {activeTab==='guia'&&<GuiaTab C={C} dm={dm} state={state} guideTextStyle={guideTextStyle} guideTipStyle={guideTipStyle} guideHighlight={guideHighlight} requestPushPermission={requestPushPermission} pushStatus={pushStatus}/>}
 
@@ -1933,35 +2056,18 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Configuração de Projeção */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">🔮 Projeção de Campeão</div>
-              <div className="a-card">
-                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
-                  Define quantas rodadas usar para calcular a projeção (%) na tabela de ranking.
-                </div>
-                <div className="a-row">
-                  <span className="a-lbl">Janela:</span>
-                  <select className="a-sel" value={projWindow} onChange={e=>setProjWindow(Number(e.target.value))}>
-                    <option value={2}>Últimas 2 rodadas</option>
-                    <option value={3}>Últimas 3 rodadas</option>
-                    <option value={5}>Últimas 5 rodadas</option>
-                    <option value={10}>Últimas 10 rodadas</option>
-                    <option value={0}>Campeonato inteiro</option>
-                  </select>
-                </div>
-                <div style={{fontSize:11,color:C.textMuted,marginTop:6,lineHeight:1.5}}>
-                  ⚠ Requer mínimo de 2 rodadas finalizadas. Com menos de 2, aparece "—" na tabela.
-                </div>
-              </div>
-            </div>
-
             {/* Configuração da Rodada */}
             <div style={{marginBottom:24}}>
               <div className="section-title">Configuração da Rodada</div>
               <div className="a-card">
-                <div className="a-row"><span className="a-lbl">Nome:</span>
-                  <input className="a-in lg" value={adminBuf.name||''} onChange={e=>setAdminBuf((b:any)=>({...b,name:e.target.value}))} placeholder="ex: Fase de Grupos - R1"/>
+                <div className="a-row">
+                  <span className="a-lbl">Nome:</span>
+                  <input className="a-in lg" value={adminBuf.name||''} onChange={e=>setAdminBuf((b:any)=>({...b,name:e.target.value}))} placeholder="ex: Fase de Grupos"/>
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Nº Rodada:</span>
+                  <input className="a-in sm" type="number" min={1} value={adminBuf.number||1} onChange={e=>setAdminBuf((b:any)=>({...b,number:parseInt(e.target.value)||1}))} placeholder="1"/>
+                  <span style={{fontSize:12,color:C.textMuted}}>Aparece como "Rodada {adminBuf.number||1}" abaixo do nome</span>
                 </div>
                 <div className="a-row"><span className="a-lbl">Fase:</span>
                   <select className="a-sel" value={adminBuf.phase||'grupos'} onChange={e=>setAdminBuf((b:any)=>({...b,phase:e.target.value}))}>
@@ -1989,7 +2095,7 @@ export default function Home() {
                   <div className="a-row">
                     <span className="a-lbl">Casa:</span>
                     {m.homeLogo
-                      ? <img src={m.homeLogo} alt="" style={{width:28,height:28,objectFit:'contain',borderRadius:4}}/>
+                      ? <img src={m.homeLogo} alt="" style={{width:40,height:40,objectFit:'contain',borderRadius:4}}/>
                       : <input className="a-in" style={{width:50}} value={m.homeFlag||''} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,homeFlag:e.target.value}:x)}))}/>
                     }
                     <input className="a-in lg" value={m.home} placeholder="País Casa" onChange={e=>{
@@ -2001,7 +2107,7 @@ export default function Home() {
                   <div className="a-row">
                     <span className="a-lbl">Fora:</span>
                     {m.awayLogo
-                      ? <img src={m.awayLogo} alt="" style={{width:28,height:28,objectFit:'contain',borderRadius:4}}/>
+                      ? <img src={m.awayLogo} alt="" style={{width:40,height:40,objectFit:'contain',borderRadius:4}}/>
                       : <input className="a-in" style={{width:50}} value={m.awayFlag||''} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,awayFlag:e.target.value}:x)}))}/>
                     }
                     <input className="a-in lg" value={m.away} placeholder="País Fora" onChange={e=>{

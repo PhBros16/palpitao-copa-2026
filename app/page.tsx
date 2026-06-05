@@ -4,6 +4,117 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 const PLAYERS = ['Ramon','Matheus Couto','Pedro Frozza','Pedro Gaúcho','Victor Bahia','Victor Simões','PH','André','Matheus Brito','Costa','Diniz','Samuel','Giovanni','Damus']
 const MASTER_PASS = 'Mestre#26Pal'
 
+// Mapeamento de nome da seleção → logo local
+const SELECOES_LOGOS: Record<string, string> = {
+  'brasil': '/logos/brasil.png',
+  'brazil': '/logos/brasil.png',
+  'argentina': '/logos/argentina.png',
+  'alemanha': '/logos/alemanha.png',
+  'germany': '/logos/alemanha.png',
+  'frança': '/logos/franca.png',
+  'franca': '/logos/franca.png',
+  'france': '/logos/franca.png',
+  'espanha': '/logos/espanha.png',
+  'spain': '/logos/espanha.png',
+  'portugal': '/logos/portugal.png',
+  'inglaterra': '/logos/inglaterra.png',
+  'england': '/logos/inglaterra.png',
+  'holanda': '/logos/holanda.png',
+  'netherlands': '/logos/holanda.png',
+  'belgica': '/logos/belgica.png',
+  'bélgica': '/logos/belgica.png',
+  'belgium': '/logos/belgica.png',
+  'croacia': '/logos/croacia.png',
+  'croácia': '/logos/croacia.png',
+  'croatia': '/logos/croacia.png',
+  'uruguai': '/logos/uruguai.png',
+  'uruguay': '/logos/uruguai.png',
+  'colombia': '/logos/colombia.png',
+  'colômbia': '/logos/colombia.png',
+  'mexico': '/logos/mexico.png',
+  'méxico': '/logos/mexico.png',
+  'eua': '/logos/eua.png',
+  'usa': '/logos/eua.png',
+  'estados unidos': '/logos/eua.png',
+  'canada': '/logos/canada.png',
+  'canadá': '/logos/canada.png',
+  'equador': '/logos/equador.png',
+  'ecuador': '/logos/equador.png',
+  'paraguai': '/logos/paraguai.png',
+  'paraguay': '/logos/paraguai.png',
+  'japao': '/logos/japao.png',
+  'japão': '/logos/japao.png',
+  'japan': '/logos/japao.png',
+  'coreia do sul': '/logos/coreia-do-sul.png',
+  'south korea': '/logos/coreia-do-sul.png',
+  'australia': '/logos/australia.png',
+  'austrália': '/logos/australia.png',
+  'marrocos': '/logos/marrocos.png',
+  'morocco': '/logos/marrocos.png',
+  'senegal': '/logos/senegal.png',
+  'gana': '/logos/gana.png',
+  'ghana': '/logos/gana.png',
+  'egito': '/logos/egito.png',
+  'egypt': '/logos/egito.png',
+  'nigeria': '/logos/nigeria.png',
+  'argelia': '/logos/argelia.png',
+  'algeria': '/logos/argelia.png',
+  'tunisia': '/logos/tunisia.png',
+  'tunísia': '/logos/tunisia.png',
+  'africa do sul': '/logos/africa-do-sul.png',
+  'south africa': '/logos/africa-do-sul.png',
+  'congo': '/logos/congo.png',
+  'costa do marfim': '/logos/costa-do-marfim.png',
+  'cabo verde': '/logos/cabo-verde.png',
+  'cabo-verde': '/logos/cabo-verde.png',
+  'arabia saudita': '/logos/arabia-saudita.png',
+  'arábia saudita': '/logos/arabia-saudita.png',
+  'saudi arabia': '/logos/arabia-saudita.png',
+  'ira': '/logos/ira.png',
+  'iran': '/logos/ira.png',
+  'iraque': '/logos/iraque.png',
+  'iraq': '/logos/iraque.png',
+  'jordania': '/logos/jordania.png',
+  'jordânia': '/logos/jordania.png',
+  'jordan': '/logos/jordania.png',
+  'qatar': '/logos/qatar.png',
+  'suica': '/logos/suica.png',
+  'suíça': '/logos/suica.png',
+  'switzerland': '/logos/suica.png',
+  'austria': '/logos/austria.png',
+  'áustria': '/logos/austria.png',
+  'suecia': '/logos/suecia.png',
+  'suécia': '/logos/suecia.png',
+  'sweden': '/logos/suecia.png',
+  'noruega': '/logos/noruega.png',
+  'norway': '/logos/noruega.png',
+  'escocia': '/logos/escocia.png',
+  'escócia': '/logos/escocia.png',
+  'scotland': '/logos/escocia.png',
+  'bosnia': '/logos/bosnia.png',
+  'bósnia': '/logos/bosnia.png',
+  'republica tcheca': '/logos/republica-tcheca.png',
+  'república tcheca': '/logos/republica-tcheca.png',
+  'czech republic': '/logos/republica-tcheca.png',
+  'turquia': '/logos/turquia.png',
+  'turkey': '/logos/turquia.png',
+  'nova zelandia': '/logos/nova-zelandia.png',
+  'nova zelândia': '/logos/nova-zelandia.png',
+  'new zealand': '/logos/nova-zelandia.png',
+  'haiti': '/logos/haiti.png',
+  'panama': '/logos/panama.png',
+  'panamá': '/logos/panama.png',
+  'curacao': '/logos/curacao.png',
+  'curaçao': '/logos/curacao.png',
+  'uzbequistao': '/logos/uzbequistao.png',
+  'uzbequistão': '/logos/uzbequistao.png',
+  'uzbekistan': '/logos/uzbequistao.png',
+}
+
+function getSelecaoLogo(name: string): string {
+  return SELECOES_LOGOS[name.toLowerCase().trim()] || ''
+}
+
 const PHASE_MULTIPLIERS: any = {
   grupos:1, dezesseis:2, oitavas:3, quartas:4, semi:5, terceiro:6, final:6
 }
@@ -1877,13 +1988,27 @@ export default function Home() {
                   </div>
                   <div className="a-row">
                     <span className="a-lbl">Casa:</span>
-                    <input className="a-in" style={{width:50}} value={m.homeFlag} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,homeFlag:e.target.value}:x)}))}/>
-                    <input className="a-in lg" value={m.home} placeholder="País Casa" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,home:e.target.value}:x)}))}/>
+                    {m.homeLogo
+                      ? <img src={m.homeLogo} alt="" style={{width:28,height:28,objectFit:'contain',borderRadius:4}}/>
+                      : <input className="a-in" style={{width:50}} value={m.homeFlag||''} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,homeFlag:e.target.value}:x)}))}/>
+                    }
+                    <input className="a-in lg" value={m.home} placeholder="País Casa" onChange={e=>{
+                      const logo = getSelecaoLogo(e.target.value)
+                      setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,home:e.target.value,homeLogo:logo,homeFlag:logo?'':x.homeFlag}:x)}))
+                    }}/>
+                    {m.homeLogo&&<button className="rm-btn" style={{padding:'3px 8px',fontSize:10}} onClick={()=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,homeLogo:'',homeFlag:'🏳'}:x)}))}>✕</button>}
                   </div>
                   <div className="a-row">
                     <span className="a-lbl">Fora:</span>
-                    <input className="a-in" style={{width:50}} value={m.awayFlag} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,awayFlag:e.target.value}:x)}))}/>
-                    <input className="a-in lg" value={m.away} placeholder="País Fora" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,away:e.target.value}:x)}))}/>
+                    {m.awayLogo
+                      ? <img src={m.awayLogo} alt="" style={{width:28,height:28,objectFit:'contain',borderRadius:4}}/>
+                      : <input className="a-in" style={{width:50}} value={m.awayFlag||''} placeholder="🏳" onChange={e=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,awayFlag:e.target.value}:x)}))}/>
+                    }
+                    <input className="a-in lg" value={m.away} placeholder="País Fora" onChange={e=>{
+                      const logo = getSelecaoLogo(e.target.value)
+                      setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,away:e.target.value,awayLogo:logo,awayFlag:logo?'':x.awayFlag}:x)}))
+                    }}/>
+                    {m.awayLogo&&<button className="rm-btn" style={{padding:'3px 8px',fontSize:10}} onClick={()=>setAdminBuf((b:any)=>({...b,matches:b.matches.map((x:any)=>x.id===m.id?{...x,awayLogo:'',awayFlag:'🏳'}:x)}))}>✕</button>}
                   </div>
                   <div className="a-row">
                     <span className="a-lbl">Data:</span>

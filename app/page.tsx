@@ -2357,35 +2357,25 @@ export default function Home() {
               </div>
               {/* ── Quadro de Palpiteiros ── */}
               <div style={{marginTop:16}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:2,color:C.textMuted,textTransform:'uppercase',marginBottom:10}}>Quadro de Palpiteiros</div>
-                {/* Grade de seleção */}
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:6,marginBottom:14}}>
-                  {PLAYERS.map(p=>{
-                    const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
-                    const hasPal = !!(state.palpites[p]&&Object.keys(state.palpites[p]).length>0)
-                    const isSelected = selectedCorrPlayer===p
-                    const initials = p.split(' ').map((w:string)=>w[0]).join('').substring(0,2).toUpperCase()
-                    return (
-                      <button key={p} onClick={()=>setSelectedCorrPlayer(isSelected?null:p)}
-                        style={{
-                          background: isSelected ? 'rgba(212,175,55,.18)' : dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',
-                          border: `1px solid ${isSelected?C.gold:C.borderFaint}`,
-                          borderRadius:8, padding:'10px 6px', cursor:'pointer',
-                          display:'flex',flexDirection:'column',alignItems:'center',gap:4,
-                          transition:'all .15s'
-                        }}>
-                        <div style={{width:36,height:36,borderRadius:'50%',
-                          background:hasPal?`linear-gradient(135deg,${C.gold},#a07820)`:'rgba(255,255,255,.08)',
-                          display:'flex',alignItems:'center',justifyContent:'center',
-                          fontFamily:"'Barlow Condensed'",fontWeight:700,fontSize:13,
-                          color:hasPal?'#001a0a':C.textMuted,border:`2px solid ${isSelected?C.gold:'transparent'}`}}>
-                          {initials}
-                        </div>
-                        <div style={{fontSize:11,color:isSelected?C.gold:C.text,fontWeight:isSelected?700:400,textAlign:'center',lineHeight:1.2}}>{p.split(' ')[0]}</div>
-                        <div style={{fontFamily:"'Bebas Neue'",fontSize:15,color:roundPts>0?C.green:C.textMuted,lineHeight:1}}>{roundPts>0?`+${roundPts}`:'—'}</div>
-                      </button>
-                    )
-                  })}
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:2,color:C.textMuted,textTransform:'uppercase',marginBottom:10}}>Correção Manual por Palpiteiro</div>
+
+                <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap',marginBottom:14}}>
+                  <select
+                    className="a-sel"
+                    value={selectedCorrPlayer||''}
+                    onChange={e=>setSelectedCorrPlayer(e.target.value||null)}
+                    style={{flex:1,minWidth:180}}
+                  >
+                    <option value="">Selecione o palpiteiro...</option>
+                    {PLAYERS.map(p=>{
+                      const pts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
+                      const hasPal = !!(state.palpites[p]&&Object.keys(state.palpites[p]).length>0)
+                      return <option key={p} value={p}>{p}{hasPal?' ✓':''}{pts>0?` — ${pts}pts`:''}</option>
+                    })}
+                  </select>
+                  {selectedCorrPlayer && (
+                    <button className="btn-sm btn-outline" onClick={()=>setSelectedCorrPlayer(null)}>✕ Limpar</button>
+                  )}
                 </div>
 
                 {/* Painel do jogador selecionado */}

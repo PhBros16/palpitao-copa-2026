@@ -270,23 +270,33 @@ function GuiaStep({ n, text }: {n:number, text:string}) {
 function PodiumDisplay({ players, scores }: { players: string[], scores: Record<string,number> }) {
   const sorted = [...players].sort((a,b)=>(scores[b]||0)-(scores[a]||0)).slice(0,3)
   const order = [sorted[1], sorted[0], sorted[2]] // prata, ouro, bronze
-  const heights = [120, 160, 90]
-  const medals = ['🥈','🥇','🥉']
+  const heights = [110, 150, 80]
+  const medals = ['🥈','👑','🥉']
   const colors = ['#9E9E9E','#D4AF37','#CD7F32']
+  const avatarSizes = [44, 54, 40]
 
   return (
-    <div style={{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:8,padding:'20px 0 0',height:220}}>
+    <div style={{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:10,padding:'24px 8px 0',height:230,overflow:'visible'}}>
       {order.map((name,i)=>{
         if(!name) return null
         const pts = scores[name]||0
         const initials = name.split(' ').map((w:string)=>w[0]).join('').substring(0,2).toUpperCase()
+        const isFirst = i===1
         return (
-          <div key={name} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6,animation:`podiumRise 0.6s ease ${i*0.15}s both`}}>
-            <span style={{fontSize:22}}>{medals[i]}</span>
-            <div style={{width:44,height:44,borderRadius:'50%',background:`linear-gradient(135deg,${colors[i]},${colors[i]}88)`,border:`2px solid ${colors[i]}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:13,color:'#001a0a',fontFamily:"'Barlow Condensed',sans-serif"}}>{initials}</div>
-            <div style={{fontSize:11,color:'#FAFAFA',fontWeight:600,textAlign:'center',maxWidth:70,lineHeight:1.2}}>{name.split(' ')[0]}</div>
-            <div style={{width:70,height:heights[i],background:`linear-gradient(to top,${colors[i]}33,${colors[i]}11)`,border:`1px solid ${colors[i]}44`,borderRadius:'6px 6px 0 0',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:colors[i]}}>{pts}</span>
+          <div key={name} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,animation:`podiumRise 0.6s ease ${i*0.15}s both`,flex:isFirst?'0 0 90px':'0 0 76px'}}>
+            <span style={{fontSize:isFirst?28:20,lineHeight:1}}>{medals[i]}</span>
+            <div style={{
+              width:avatarSizes[i],height:avatarSizes[i],borderRadius:'50%',
+              background:`linear-gradient(135deg,${colors[i]},${colors[i]}88)`,
+              border:`2px solid ${colors[i]}`,
+              display:'flex',alignItems:'center',justifyContent:'center',
+              fontWeight:700,fontSize:isFirst?15:12,color:'#001a0a',
+              fontFamily:"'Barlow Condensed',sans-serif",
+              boxShadow:isFirst?`0 0 16px ${colors[i]}66`:'none',
+            }}>{initials}</div>
+            <div style={{fontSize:11,color:'#FAFAFA',fontWeight:600,textAlign:'center',maxWidth:80,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name.split(' ')[0]}</div>
+            <div style={{width:'100%',height:heights[i],background:`linear-gradient(to top,${colors[i]}44,${colors[i]}11)`,border:`1px solid ${colors[i]}55`,borderRadius:'6px 6px 0 0',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isFirst?24:18,color:colors[i]}}>{pts}</span>
             </div>
           </div>
         )
@@ -296,15 +306,26 @@ function PodiumDisplay({ players, scores }: { players: string[], scores: Record<
 }
 
 // ── Gráfico de evolução ─────────────────────────────────────────────────────
-function EvolucaoChart({ history, players, C }: any) {
+function EvolucaoChart({ history, players, C, windowSize=0 }: any) {
   if(!history||history.length===0) return <div style={{color:C.textMuted,fontSize:13,padding:'20px 0',textAlign:'center'}}>Nenhuma rodada finalizada ainda.</div>
+
+  // Aplica janela de exibição
+  const visibleHistory = windowSize === 0 ? history : history.slice(-Math.min(windowSize, history.length))
+  // Offset para acumular pontos anteriores à janela
+  const offsetHistory = windowSize === 0 ? [] : history.slice(0, history.length - visibleHistory.length)
 
   // Acumula pontos por rodada
   const accumulated: Record<string, number[]> = {}
   players.forEach((p:string) => { accumulated[p] = [] })
 
-  let running: Record<string,number> = {}
-  history.forEach((r:any) => {
+  // Soma pontos anteriores à janela como base
+  let base: Record<string,number> = {}
+  offsetHistory.forEach((r:any) => {
+    players.forEach((p:string) => { base[p] = (base[p]||0) + (r.scores?.[p]||0) })
+  })
+
+  let running: Record<string,number> = {...base}
+  visibleHistory.forEach((r:any) => {
     players.forEach((p:string) => {
       running[p] = (running[p]||0) + (r.scores?.[p]||0)
       accumulated[p].push(running[p])
@@ -343,11 +364,16 @@ function EvolucaoChart({ history, players, C }: any) {
         {/* Linhas dos jogadores */}
         {top5.map((p:string, pi:number)=>{
           const pts = accumulated[p]
-          if(pts.length < 2) return null
+          if(pts.length === 0) return null
+          const color = colors[pi%colors.length]
+          // com uma só rodada: só o ponto
+          if(pts.length === 1) return <g key={p}>
+            <circle cx={getX(0)} cy={getY(pts[0])} r={4} fill={color}/>
+          </g>
           const d = pts.map((v,i)=>`${i===0?'M':'L'}${getX(i)},${getY(v)}`).join(' ')
           return <g key={p}>
-            <path d={d} fill="none" stroke={colors[pi%colors.length]} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.85}/>
-            <circle cx={getX(pts.length-1)} cy={getY(pts[pts.length-1])} r={3} fill={colors[pi%colors.length]}/>
+            <path d={d} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.85}/>
+            <circle cx={getX(pts.length-1)} cy={getY(pts[pts.length-1])} r={3} fill={color}/>
           </g>
         })}
       </svg>
@@ -553,121 +579,114 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
   const s = calcPlayerStats(player, history)
   const allStats = allPlayers.reduce((acc:any, p:string) => { acc[p]=calcPlayerStats(p,history); return acc }, {})
 
-  const melhorMedia    = allPlayers.reduce((best,p) => allStats[p].mediaPts > (allStats[best]?.mediaPts||0) ? p : best, allPlayers[0])
-  const maisExatos     = allPlayers.reduce((best,p) => allStats[p].exatos   > (allStats[best]?.exatos  ||0) ? p : best, allPlayers[0])
-  const maisEmpates    = allPlayers.reduce((best,p) => allStats[p].pctEmpate> (allStats[best]?.pctEmpate||0) ? p : best, allPlayers[0])
-  const maisUltimo     = allPlayers.reduce((best,p) => allStats[p].rodadasUltimo>(allStats[best]?.rodadasUltimo||0) ? p : best, allPlayers[0])
-  const maisPrimeiro   = allPlayers.reduce((best,p) => allStats[p].rodadasPrimeiro>(allStats[best]?.rodadasPrimeiro||0) ? p : best, allPlayers[0])
+  const melhorMedia  = allPlayers.reduce((best,p) => allStats[p].mediaPts > (allStats[best]?.mediaPts||0) ? p : best, allPlayers[0])
+  const maisEmpates  = allPlayers.reduce((best,p) => allStats[p].pctEmpate> (allStats[best]?.pctEmpate||0) ? p : best, allPlayers[0])
+  const maisUltimo   = allPlayers.reduce((best,p) => allStats[p].rodadasUltimo>(allStats[best]?.rodadasUltimo||0) ? p : best, allPlayers[0])
+  const maisPrimeiro = allPlayers.reduce((best,p) => allStats[p].rodadasPrimeiro>(allStats[best]?.rodadasPrimeiro||0) ? p : best, allPlayers[0])
 
-  type Trofeu = { icon:string; label:string; desc:string; raro:boolean; unlocked:boolean }
-  const todos: Trofeu[] = [
-    // ── Individuais por performance ──
-    { icon:'🎯', label:'Olho de Águia',      desc:'Acertou 3+ placares exatos na competição',          raro:false, unlocked: s.exatos >= 3 },
-    { icon:'💎', label:'Perfeição',           desc:'Acertou todos os placares de uma rodada',            raro:true,  unlocked: history.some((r:any)=>{
-        const jogos = Object.keys(r.results||{}).filter(id=>r.results[id]?.h!=='')
-        if(jogos.length<2) return false
-        return jogos.every(id=> {
-          const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]
-          return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a
-        })
-    })},
-    { icon:'🌪️', label:'Hat-trick',          desc:'3 placares exatos na mesma rodada',                  raro:true,  unlocked: history.some((r:any)=>{
-        let cnt=0
-        Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a) cnt++ })
-        return cnt>=3
-    })},
-    { icon:'🧱', label:'O Muralha',           desc:'3 rodadas seguidas sem zerar em nenhum jogo',        raro:false, unlocked: s.maxSeriaSemZero >= 3 },
-    { icon:'📈', label:'Virada de Mesa',      desc:'Maior salto de posição em uma rodada (3+ posições)', raro:false, unlocked: s.maxSaltoPos >= 3 },
-    { icon:'🧊', label:'Sangue Frio',         desc:'Acertou placar exato em jogo de mata-mata',          raro:true,  unlocked: history.some((r:any)=>{
-        if(!['oitavas','quartas','semi','final','3lugar','16avos'].includes((r.phase||'').toLowerCase())) return false
-        return Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a })
-    })},
-    { icon:'💪', label:'Veterano',            desc:'Participou de 5+ rodadas',                           raro:false, unlocked: s.rodadas >= 5 },
-    { icon:'🔥', label:'Em Chamas',           desc:'5+ rodadas no top 3',                                raro:false, unlocked: s.rodadasTop3 >= 5 },
+  // ── TIER 1: Qualquer um pode ter (achievements de participação / comportamento) ──
+  type Trofeu = { icon:string; label:string; desc:string; tier:1|2|3|4; unlocked:boolean; newlyUnlocked?:boolean }
 
-    // ── Comparativos (só um ganha) ──
-    { icon:'🧠', label:'O Analista',          desc:'Maior média de pontos por rodada',                   raro:true,  unlocked: s.rodadas>=3 && player===melhorMedia },
-    { icon:'🏆', label:'Líder Absoluto',      desc:'Ficou mais rodadas em 1º lugar',                     raro:true,  unlocked: s.rodadasPrimeiro>=2 && player===maisPrimeiro },
-    { icon:'💩', label:'Lanterninha Raiz',    desc:'Ficou mais rodadas em último... muito obrigado',      raro:false, unlocked: s.rodadasUltimo>=3 && player===maisUltimo },
-    { icon:'🏳️', label:'O Pacifista',        desc:'Apostou empate em mais da metade dos jogos de uma rodada', raro:false, unlocked: history.some((r:any)=>{
+  const tier1: Trofeu[] = [
+    { icon:'🎯', tier:1, label:'Olho de Águia',   desc:'Acertou 3+ placares exatos na competição',
+      unlocked: s.exatos >= 3 },
+    { icon:'💪', tier:1, label:'Veterano',         desc:'Participou de 5+ rodadas',
+      unlocked: s.rodadas >= 5 },
+    { icon:'🧱', tier:1, label:'O Muralha',        desc:'3 rodadas seguidas sem zerar',
+      unlocked: s.maxSeriaSemZero >= 3 },
+    { icon:'📈', tier:1, label:'Virada de Mesa',   desc:'Subiu 3+ posições no ranking em uma rodada',
+      unlocked: s.maxSaltoPos >= 3 },
+    { icon:'🏁', tier:1, label:'Resistente',       desc:'Participou de todas as rodadas sem faltar nenhuma',
+      unlocked: history.length >= 5 && s.faltouPalpitar === 0 },
+    { icon:'🏳️', tier:1, label:'O Pacifista',     desc:'Apostou empate em mais da metade dos jogos de uma rodada',
+      unlocked: history.some((r:any)=>{
         const pals = Object.values(r.palpites?.[player]||{}).filter((p:any)=>p&&p.h!=='')
         if((pals as any[]).length<2) return false
-        const empates = (pals as any[]).filter(p=>p.h===p.a).length
+        const empates = (pals as any[]).filter((p:any)=>p.h===p.a).length
         return empates/(pals as any[]).length > 0.5
-    })},
-    { icon:'🤝', label:'Diplomata',           desc:'Quem mais apostou empates na competição toda',        raro:false, unlocked: s.rodadas>=3 && player===maisEmpates },
-
-    // ── Zueiros ──
-    { icon:'🐔', label:'Galinha',             desc:'Nunca apostou mais de 2 gols no total num único jogo', raro:false, unlocked: s.rodadas>=3 && history.every((r:any)=>{
-        return Object.values(r.palpites?.[player]||{}).every((p:any)=>!p||p.h===''||parseInt(p.h)+parseInt(p.a)<=2)
-    })},
-    { icon:'💀', label:'O Otimista Trágico',  desc:'Apostou goleada (5+ gols) e nunca acertou',           raro:false, unlocked: s.goleadasApostadas>=3 && s.goleadasAcertadas===0 },
-    { icon:'🗿', label:'O Monólito',          desc:'Apostou o mesmo placar em todos os jogos de uma rodada', raro:false, unlocked: history.some((r:any)=>{
+      })},
+    { icon:'⚰️', tier:1, label:'Zero a Zero',      desc:'Apostou 0x0 em 3+ jogos ao longo da competição',
+      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.values(r.palpites?.[player]||{}).forEach((pal:any)=>{ if(pal&&pal.h==='0'&&pal.a==='0') cnt++ }) }); return cnt>=3 })() },
+    { icon:'🐔', tier:1, label:'Galinha',           desc:'Nunca apostou mais de 2 gols totais num único jogo',
+      unlocked: s.rodadas>=3 && history.every((r:any)=>Object.values(r.palpites?.[player]||{}).every((p:any)=>!p||p.h===''||parseInt(p.h)+parseInt(p.a)<=2)) },
+    { icon:'😴', tier:1, label:'Dormiu no Ponto',   desc:'Perdeu o prazo de palpite em 3+ rodadas',
+      unlocked: s.faltouPalpitar >= 3 },
+    { icon:'🗿', tier:1, label:'O Monólito',        desc:'Apostou o mesmo placar em todos os jogos de uma rodada',
+      unlocked: history.some((r:any)=>{
         const pals = Object.values(r.palpites?.[player]||{}).filter((p:any)=>p&&p.h!=='')
         if((pals as any[]).length<2) return false
         const primeiro = pals[0] as any
-        return (pals as any[]).every(p=>p.h===primeiro.h&&p.a===primeiro.a)
-    })},
-    { icon:'🐢', label:'Tartaruga',           desc:'Ficou 3 rodadas em último e conseguiu sair',          raro:false, unlocked: s.rodadasUltimo>=3 && history.length>s.rodadasUltimo },
-    { icon:'😴', label:'Dormiu no Ponto',     desc:'Perdeu o prazo de palpite em 3+ rodadas',             raro:false, unlocked: s.faltouPalpitar >= 3 },
-    { icon:'📉', label:'O Eterno Vice',       desc:'3+ rodadas em 2º sem nunca chegar ao 1º',             raro:false, unlocked: (()=>{
-        let vice=0
-        history.forEach((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); if(sorted[1]?.[0]===player) vice++ })
-        return vice>=3 && s.rodadasPrimeiro===0
-    })()},
-    { icon:'👻', label:'O Fantasma',          desc:'Não palpitou em uma rodada e mesmo assim não ficou em último', raro:true, unlocked: history.some((r:any)=>{
-        if(r.palpites?.[player] && Object.keys(r.palpites[player]).length>0) return false
-        const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])
-        return sorted[sorted.length-1]?.[0] !== player
-    })},
-
-    // ── Novos troféus ──
-    { icon:'🧮', label:'O Contador',           desc:'Acertou o saldo de gols em 10+ jogos sem acertar o placar exato', raro:false, unlocked: (()=>{
-        let cnt=0
-        history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) })
-        return cnt>=10
-    })()},
-    { icon:'⚰️', label:'Zero a Zero',          desc:'Apostou 0x0 em 3+ jogos ao longo da competição', raro:false, unlocked: (()=>{
-        let cnt=0
-        history.forEach((r:any)=>{ Object.values(r.palpites?.[player]||{}).forEach((pal:any)=>{ if(pal&&pal.h==='0'&&pal.a==='0') cnt++ }) })
-        return cnt>=3
-    })()},
-    { icon:'🦜', label:'O Papagaio',           desc:'Apostou igual ao líder do ranking em todos os jogos de uma rodada', raro:false, unlocked: (()=>{
-        return history.some((r:any)=>{
-          const lider = Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]
-          if(!lider||lider===player) return false
-          const myPals = r.palpites?.[player]||{}
-          const liderPals = r.palpites?.[lider]||{}
-          const ids = Object.keys(myPals).filter(id=>myPals[id]&&myPals[id].h!=='')
-          if(ids.length<2) return false
-          return ids.every(id=>liderPals[id]&&myPals[id].h===liderPals[id].h&&myPals[id].a===liderPals[id].a)
-        })
-    })()},
-    { icon:'🏁', label:'Resistente',           desc:'Participou de todas as rodadas sem faltar nenhuma', raro:false, unlocked: history.length>=5 && s.faltouPalpitar===0 },
-    { icon:'📊', label:'O Consistente',        desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada', raro:true, unlocked: (()=>{
-        if(history.length<3) return false
-        return history.every((r:any)=>{
-          const pts = r.scores?.[player]??0
-          const all = Object.values(r.scores||{}) as number[]
-          if(all.length<2) return true
-          const media = all.reduce((a:number,b:number)=>a+b,0)/all.length
-          return pts>=media
-        })
-    })()},
-    { icon:'🎪', label:'O Showman',            desc:'Acertou um placar com 5+ gols no total', raro:true, unlocked: history.some((r:any)=>{
-        return Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 })
-    })},
-    { icon:'🤡', label:'Flamenguista',         desc:'Apostou na vitória do Brasil em todos os jogos que o Brasil jogou', raro:false, unlocked: (()=>{
-        let totalBrasil=0, apostouVitoria=0
-        history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const m = r.matches?.find((x:any)=>x.id===id); if(!m) return; const isBrasil = ['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)||m.away?.toLowerCase().includes(b)); if(!isBrasil) return; totalBrasil++; const pal=r.palpites?.[player]?.[id]; if(!pal||pal.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a); const brasilEhCasa=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)); if(brasilEhCasa&&ph>pa) apostouVitoria++; else if(!brasilEhCasa&&pa>ph) apostouVitoria++ }) })
-        return totalBrasil>=3&&apostouVitoria===totalBrasil
-    })()},
+        return (pals as any[]).every((p:any)=>p.h===primeiro.h&&p.a===primeiro.a)
+      })},
+    { icon:'🧮', tier:1, label:'O Contador',        desc:'Acertou o saldo de gols em 5+ jogos (sem acertar o placar exato)',
+      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=5 })() },
+    { icon:'🤡', tier:1, label:'Flamenguista',      desc:'Apostou na vitória do Brasil em todos os jogos do Brasil',
+      unlocked: (()=>{ let tot=0,vic=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const m=r.matches?.find((x:any)=>x.id===id); if(!m) return; const isBR=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)||m.away?.toLowerCase().includes(b)); if(!isBR) return; tot++; const pal=r.palpites?.[player]?.[id]; if(!pal||pal.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a); const casa=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)); if(casa&&ph>pa) vic++; else if(!casa&&pa>ph) vic++ }) }); return tot>=3&&vic===tot })() },
+    { icon:'💩', tier:1, label:'Lanterninha Raiz',  desc:'Ficou 3+ rodadas em último lugar',
+      unlocked: s.rodadasUltimo >= 3 && player === maisUltimo },
+    { icon:'📉', tier:1, label:'O Eterno Vice',     desc:'3+ rodadas em 2º sem nunca chegar ao 1º',
+      unlocked: (()=>{ let vice=0; history.forEach((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); if(sorted[1]?.[0]===player) vice++ }); return vice>=3 && s.rodadasPrimeiro===0 })() },
+    { icon:'💀', tier:1, label:'O Otimista Trágico',desc:'Apostou goleada (5+ gols) 3x e nunca acertou',
+      unlocked: s.goleadasApostadas>=3 && s.goleadasAcertadas===0 },
   ]
 
-  return todos
+  // ── TIER 2: Nem todo mundo tem (requerem desempenho acima da média) ──
+  const tier2: Trofeu[] = [
+    { icon:'🔥', tier:2, label:'Em Chamas',       desc:'5+ rodadas no top 3',
+      unlocked: s.rodadasTop3 >= 5 },
+    { icon:'🌪️', tier:2, label:'Hat-trick',       desc:'3 placares exatos na mesma rodada',
+      unlocked: history.some((r:any)=>{ let cnt=0; Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a) cnt++ }); return cnt>=3 })},
+    { icon:'🧠', tier:2, label:'O Analista',      desc:'Maior média de pontos por rodada (mín. 3 rodadas)',
+      unlocked: s.rodadas>=3 && player===melhorMedia },
+    { icon:'📊', tier:2, label:'O Consistente',   desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada (mín. 3)',
+      unlocked: (()=>{ if(history.length<3) return false; return history.every((r:any)=>{ const pts=r.scores?.[player]??0; const all=Object.values(r.scores||{}) as number[]; if(all.length<2) return true; const media=all.reduce((a:number,b:number)=>a+b,0)/all.length; return pts>=media }) })() },
+    { icon:'🧊', tier:2, label:'Sangue Frio',     desc:'Acertou placar exato em jogo de mata-mata',
+      unlocked: history.some((r:any)=>{ if(!['oitavas','quartas','semi','final','3lugar','16avos','dezesseis'].includes((r.phase||'').toLowerCase())) return false; return Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a }) })},
+    { icon:'🦜', tier:2, label:'O Papagaio',      desc:'Apostou igual ao líder em todos os jogos de uma rodada',
+      unlocked: (()=>{ return history.some((r:any)=>{ const lider=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]; if(!lider||lider===player) return false; const myP=r.palpites?.[player]||{}; const lP=r.palpites?.[lider]||{}; const ids=Object.keys(myP).filter(id=>myP[id]&&myP[id].h!==''); if(ids.length<2) return false; return ids.every(id=>lP[id]&&myP[id].h===lP[id].h&&myP[id].a===lP[id].a) }) })() },
+    { icon:'🐢', tier:2, label:'Tartaruga',       desc:'Ficou 3 rodadas em último e conseguiu sair',
+      unlocked: s.rodadasUltimo>=3 && history.length>s.rodadasUltimo },
+    { icon:'🤝', tier:2, label:'Diplomata',       desc:'Apostou mais empates que qualquer outro participante',
+      unlocked: s.rodadas>=3 && player===maisEmpates },
+    { icon:'🎪', tier:2, label:'O Showman',       desc:'Acertou um placar com 5+ gols no total',
+      unlocked: history.some((r:any)=>Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 }))},
+    { icon:'👻', tier:2, label:'O Fantasma',      desc:'Não palpitou e mesmo assim não ficou em último',
+      unlocked: history.some((r:any)=>{ if(r.palpites?.[player]&&Object.keys(r.palpites[player]).length>0) return false; const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); return sorted[sorted.length-1]?.[0]!==player })},
+  ]
+
+  // ── TIER 3: Levanta que é só seu (exclusivos, difíceis, únicos) ──
+  const tier3: Trofeu[] = [
+    { icon:'💎', tier:3, label:'Perfeição',        desc:'Acertou TODOS os placares de uma rodada (mín. 2 jogos)',
+      unlocked: history.some((r:any)=>{ const jogos=Object.keys(r.results||{}).filter(id=>r.results[id]?.h!==''); if(jogos.length<2) return false; return jogos.every(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a }) })},
+    { icon:'🏆', tier:3, label:'Líder Absoluto',   desc:'Ficou mais rodadas em 1º lugar que qualquer outro',
+      unlocked: s.rodadasPrimeiro>=2 && player===maisPrimeiro },
+    { icon:'⚡', tier:3, label:'Relâmpago',        desc:'10+ placares exatos ao longo de toda a competição',
+      unlocked: s.exatos >= 10 },
+    { icon:'🦅', tier:3, label:'O Predador',       desc:'Top 3 em todas as rodadas sem exceção (mín. 4 rodadas)',
+      unlocked: history.length>=4 && s.faltouPalpitar===0 && history.every((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); const pos=sorted.findIndex(([p])=>p===player); return pos<=2 })},
+    { icon:'🎖️', tier:3, label:'Invicto',          desc:'Nunca ficou em último em nenhuma rodada (mín. 5 rodadas)',
+      unlocked: history.length>=5 && s.faltouPalpitar===0 && history.every((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); return sorted[sorted.length-1]?.[0]!==player })},
+    { icon:'🧿', tier:3, label:'Saldo Perfeito',   desc:'Acertou o saldo de gols em 15+ jogos na competição',
+      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=15 })() },
+  ]
+
+  // ── TIER 4: Troféu Épico — Campeão! ──
+  // Quem tem mais pontos totais ao final (só desbloqueado se há pelo menos 3 rodadas)
+  const tier4: Trofeu[] = [
+    { icon:'👑', tier:4, label:'CAMPEÃO!', desc:'O maior pontuador de toda a competição. Eterno!',
+      unlocked: (()=>{
+        if(history.length < 3) return false
+        const totalPts: Record<string,number> = {}
+        allPlayers.forEach(p=>{ totalPts[p]=allStats[p].totalPts })
+        const lider = allPlayers.reduce((best,p)=>totalPts[p]>totalPts[best]?p:best, allPlayers[0])
+        return player===lider && totalPts[lider]>0
+      })()},
+  ]
+
+  return [...tier1, ...tier2, ...tier3, ...tier4]
 }
 
-function EstatisticasPessoais({ player, history, allPlayers, C, dm }: any) {
+function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu }: any) {
   const [showTrofeus, setShowTrofeus] = useState(false)
   const s = calcPlayerStats(player, history)
 
@@ -679,6 +698,67 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm }: any) {
   const trofeus = calcTrofeus(player, history, allPlayers||[player])
   const conquistados = trofeus.filter(t=>t.unlocked)
   const bloqueados   = trofeus.filter(t=>!t.unlocked)
+
+  // Separar por tier
+  const tier1Conq = conquistados.filter(t=>t.tier===1)
+  const tier2Conq = conquistados.filter(t=>t.tier===2)
+  const tier3Conq = conquistados.filter(t=>t.tier===3)
+  const tier4Conq = conquistados.filter(t=>t.tier===4)
+
+  const tierColors: Record<number,string> = {
+    1: 'rgba(255,255,255,.12)',
+    2: 'rgba(100,180,255,.15)',
+    3: 'rgba(212,175,55,.18)',
+    4: 'rgba(255,100,200,.18)',
+  }
+  const tierBorders: Record<number,string> = {
+    1: 'rgba(255,255,255,.15)',
+    2: 'rgba(100,180,255,.35)',
+    3: 'rgba(212,175,55,.5)',
+    4: 'rgba(255,100,200,.6)',
+  }
+  const tierLabels: Record<number,string> = {
+    1: '🟢 Qualquer um pode ter',
+    2: '🔵 Nem todo mundo tem',
+    3: '🌟 Levanta que é só seu',
+    4: '👑 ÉPICO',
+  }
+
+  function TrofeuCard({ t }: { t: any }) {
+    const isEpic = t.tier === 4
+    const isExclusive = t.tier === 3
+    return (
+      <div style={{
+        background: isEpic
+          ? 'linear-gradient(135deg,rgba(255,100,200,.2),rgba(212,175,55,.2))'
+          : isExclusive
+            ? 'linear-gradient(135deg,rgba(212,175,55,.18),rgba(255,215,0,.08))'
+            : tierColors[t.tier],
+        border: `1px solid ${tierBorders[t.tier]}`,
+        borderRadius: isEpic ? 14 : 10,
+        padding: isEpic ? '16px 18px' : '11px 13px',
+        display:'flex', alignItems:'center', gap:12,
+        boxShadow: isEpic
+          ? '0 0 20px rgba(255,100,200,.25),0 0 40px rgba(212,175,55,.1)'
+          : isExclusive
+            ? '0 0 12px rgba(212,175,55,.15)'
+            : 'none',
+      }}>
+        <span style={{fontSize:isEpic?36:26,flexShrink:0}}>{t.icon}</span>
+        <div style={{flex:1}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap' as const}}>
+            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isEpic?20:15,
+              color: isEpic ? '#FFB6FF' : isExclusive ? C.gold : '#fff',
+              letterSpacing:isEpic?3:1}}>{t.label}</span>
+            {isEpic && <span style={{fontSize:9,background:'rgba(255,100,200,.3)',color:'#FFB6FF',border:'1px solid rgba(255,100,200,.5)',borderRadius:4,padding:'1px 6px',letterSpacing:2}}>ÉPICO</span>}
+            {isExclusive && <span style={{fontSize:9,background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
+            {t.tier===2 && <span style={{fontSize:9,background:'rgba(100,180,255,.2)',color:'#7ab0ff',border:'1px solid rgba(100,180,255,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
+          </div>
+          <div style={{fontSize:11,color:isEpic?'rgba(255,200,255,.8)':C.textMuted,marginTop:2,lineHeight:1.4}}>{t.desc}</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -737,31 +817,45 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm }: any) {
 
         {showTrofeus && (
           <div style={{marginTop:10,animation:'fadeSlideIn .2s ease both'}}>
-            {/* Conquistados */}
-            {conquistados.length > 0 && (
-              <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,color:C.textMuted,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>✅ Conquistados</div>
+
+            {/* Épico primeiro */}
+            {tier4Conq.length > 0 && (
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:10,color:'#FFB6FF',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                  <span>👑</span> ÉPICO
+                </div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
-                  {conquistados.map((t,i)=>(
-                    <div key={i} style={{
-                      background: t.raro
-                        ? 'linear-gradient(135deg,rgba(212,175,55,.18),rgba(255,215,0,.08))'
-                        : 'rgba(0,60,30,.5)',
-                      border:`1px solid ${t.raro?'rgba(212,175,55,.5)':'rgba(255,255,255,.1)'}`,
-                      borderRadius:10,padding:'12px 14px',
-                      display:'flex',alignItems:'center',gap:12,
-                      boxShadow: t.raro?'0 0 12px rgba(212,175,55,.15)':'none'
-                    }}>
-                      <span style={{fontSize:28,flexShrink:0}}>{t.icon}</span>
-                      <div style={{flex:1}}>
-                        <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap' as const}}>
-                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:t.raro?C.gold:'#fff',letterSpacing:1}}>{t.label}</span>
-                          {t.raro && <span style={{fontSize:9,background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
-                        </div>
-                        <div style={{fontSize:11,color:C.textMuted,marginTop:2,lineHeight:1.4}}>{t.desc}</div>
-                      </div>
-                    </div>
-                  ))}
+                  {tier4Conq.map((t,i)=><TrofeuCard key={i} t={t}/>)}
+                </div>
+              </div>
+            )}
+
+            {/* Tier 3 */}
+            {tier3Conq.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,color:C.gold,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🌟 Levanta que é só seu</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                  {tier3Conq.map((t,i)=><TrofeuCard key={i} t={t}/>)}
+                </div>
+              </div>
+            )}
+
+            {/* Tier 2 */}
+            {tier2Conq.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,color:'#7ab0ff',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🔵 Nem todo mundo tem</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                  {tier2Conq.map((t,i)=><TrofeuCard key={i} t={t}/>)}
+                </div>
+              </div>
+            )}
+
+            {/* Tier 1 */}
+            {tier1Conq.length > 0 && (
+              <div style={{marginBottom:14}}>
+                <div style={{fontSize:10,color:C.textMuted,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🟢 Qualquer um pode ter</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:6}}>
+                  {tier1Conq.map((t,i)=><TrofeuCard key={i} t={t}/>)}
                 </div>
               </div>
             )}
@@ -770,20 +864,19 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm }: any) {
             {bloqueados.length > 0 && (
               <div>
                 <div style={{fontSize:10,color:C.textMuted,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🔒 Bloqueados</div>
-                <div style={{display:'flex',flexDirection:'column' as const,gap:6}}>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:5}}>
                   {bloqueados.map((t,i)=>(
                     <div key={i} style={{
-                      background:'rgba(255,255,255,.03)',
-                      border:'1px solid rgba(255,255,255,.07)',
-                      borderRadius:8,padding:'10px 14px',
-                      display:'flex',alignItems:'center',gap:12,
-                      opacity:0.55
+                      background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)',
+                      borderRadius:8,padding:'9px 13px',display:'flex',alignItems:'center',gap:12,opacity:0.5
                     }}>
-                      <span style={{fontSize:22,flexShrink:0,filter:'grayscale(1)'}}>{t.icon}</span>
+                      <span style={{fontSize:20,flexShrink:0,filter:'grayscale(1)'}}>{t.icon}</span>
                       <div>
                         <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap' as const}}>
-                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:14,color:C.textMuted,letterSpacing:1}}>{t.label}</span>
-                          {t.raro && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
+                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,color:C.textMuted,letterSpacing:1}}>{t.label}</span>
+                          {t.tier===4 && <span style={{fontSize:9,color:'rgba(255,150,255,.4)',border:'1px solid rgba(255,150,255,.2)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>ÉPICO</span>}
+                          {t.tier===3 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
+                          {t.tier===2 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
                         </div>
                         <div style={{fontSize:11,color:C.textSub,marginTop:1}}>{t.desc}</div>
                       </div>
@@ -873,9 +966,12 @@ export default function Home() {
   const [pushStatus, setPushStatus] = useState<'unknown'|'granted'|'denied'|'default'>('unknown')
   const [compareTarget, setCompareTarget] = useState<string|null>(null)
   const [projWindow, setProjWindow] = useState<number>(3) // janela de projeção em rodadas
+  const [evolucaoWindow, setEvolucaoWindow] = useState<number>(0) // janela do gráfico de evolução (0 = desde o início)
   const [chatMsg, setChatMsg] = useState('')
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatLoading, setChatLoading] = useState(false)
+  const [trofeuNotif, setTrofeuNotif] = useState<{icon:string,label:string}|null>(null)
+  const trofeuNotifTimer = useRef<any>(null)
 
 
   const chatEndRef = useRef<any>(null)
@@ -997,6 +1093,26 @@ export default function Home() {
           setShowNovidade(true)
         }
       }
+      // Verifica troféus novos
+      checkNewTrofeus(name, state)
+    }
+  }
+
+  function checkNewTrofeus(player: string, s: any) {
+    if(!s.roundHistory?.length) return
+    const trofeus = calcTrofeus(player, s.roundHistory, PLAYERS)
+    const conquistados = trofeus.filter(t=>t.unlocked)
+    const storageKey = `palpitao_trofeus_${player}`
+    const seen: string[] = JSON.parse(localStorage.getItem(storageKey)||'[]')
+    const newOnes = conquistados.filter(t=>!seen.includes(t.label))
+    if(newOnes.length > 0) {
+      // Salva os novos como vistos
+      localStorage.setItem(storageKey, JSON.stringify([...seen, ...newOnes.map(t=>t.label)]))
+      // Mostra o mais relevante (maior tier)
+      const best = newOnes.sort((a,b)=>b.tier-a.tier)[0]
+      if(trofeuNotifTimer.current) clearTimeout(trofeuNotifTimer.current)
+      setTrofeuNotif({icon:best.icon, label:best.label})
+      trofeuNotifTimer.current = setTimeout(()=>setTrofeuNotif(null), 5000)
     }
   }
 
@@ -1157,7 +1273,15 @@ export default function Home() {
       })
       tiebreak[p]={exact,correct}
     })
-    newState.roundHistory.push({roundName:newState.round.name,scores,tiebreak})
+    newState.roundHistory.push({
+      roundName:newState.round.name,
+      phase: newState.round.phase,
+      matches: JSON.parse(JSON.stringify(newState.round.matches)),
+      palpites: JSON.parse(JSON.stringify(newState.palpites)),
+      results: JSON.parse(JSON.stringify(newState.results)),
+      scores,
+      tiebreak,
+    })
     newState.palpites={}; newState.palpiteTimes={}; newState.correctedScores={}; newState.results={}
     newState.roundFinalized=true; newState.round.name=''; newState.round.matches=[]
     await saveState(newState, authPassword, `Rodada finalizada: "${newState.roundHistory[newState.roundHistory.length-1]?.roundName||'rodada'}"`); showNotif('Rodada finalizada! 🏆')
@@ -1729,6 +1853,23 @@ export default function Home() {
       {notif && <div className="notif-box" style={{borderColor:notif.type==='error'?'#e74c3c':C.gold}}>
         {notif.type==='error'?'✕ ':'★ '}{notif.msg}
       </div>}
+      {trofeuNotif && (
+        <div style={{
+          position:'fixed',bottom:80,left:'50%',transform:'translateX(-50%)',
+          background:'linear-gradient(135deg,rgba(0,20,10,.97),rgba(0,40,20,.97))',
+          border:'1px solid rgba(212,175,55,.6)',borderRadius:14,
+          padding:'14px 20px',zIndex:9999,display:'flex',alignItems:'center',gap:12,
+          boxShadow:'0 4px 24px rgba(0,0,0,.5),0 0 20px rgba(212,175,55,.2)',
+          animation:'notifIn .3s cubic-bezier(.22,1,.36,1) both',
+          minWidth:220,maxWidth:300,
+        }}>
+          <span style={{fontSize:32}}>{trofeuNotif.icon}</span>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:2,color:'rgba(212,175,55,.7)',marginBottom:2}}>🏛️ TROFÉU DESBLOQUEADO!</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:'#D4AF37',letterSpacing:2}}>{trofeuNotif.label}</div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Resultados da Rodada */}
       {showResultados && (()=>{
@@ -1892,7 +2033,7 @@ export default function Home() {
 
               return (
                 <button key={t} className={`tab-btn${activeTab===t?' active':''}`} onClick={()=>setActiveTab(t)} style={{position:'relative'}}>
-                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='chat'?'💬 Chat':t==='geral'?'📊 Geral':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
+                  {t==='home'?'🏠 Início':t==='palpites'?'✏ Palpites':t==='chat'?'💬 Chat':t==='geral'?'📊 Rodada':t==='ranking'?'🏆 Ranking':t==='historico'?'📅 Histórico':'📖 Guia'}
                   {hasNovidade && <span style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'#e74c3c',border:'1px solid rgba(0,0,0,.3)'}}/>}
                 </button>
               )
@@ -2259,7 +2400,7 @@ export default function Home() {
 
           {/* ── GERAL ── */}
           {activeTab==='geral'&&<div>
-            <div className="section-title">Tabela Geral</div>
+            <div className="section-title">Tabela da Rodada</div>
             <div className="section-sub">Palpites da rodada atual</div>
             {(()=>{
               const sortedMatches = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
@@ -2364,7 +2505,7 @@ export default function Home() {
             {state.roundHistory.length > 0 && (
               <div className="card" style={{marginBottom:20}}>
                 <div className="section-title" style={{fontSize:17,marginBottom:12}}>Evolução por Rodada</div>
-                <EvolucaoChart history={state.roundHistory} players={PLAYERS} C={C}/>
+                <EvolucaoChart history={state.roundHistory} players={PLAYERS} C={C} windowSize={evolucaoWindow}/>
               </div>
             )}
 
@@ -2588,6 +2729,47 @@ export default function Home() {
                 </div>
                 <div style={{fontSize:11,color:C.textMuted,marginTop:6,lineHeight:1.5}}>
                   ⚠ Requer mínimo de 2 rodadas finalizadas. Com menos de 2, aparece "—" na tabela.
+                </div>
+              </div>
+            </AdminSection>
+
+            {/* Configuração do Gráfico de Evolução */}
+            <AdminSection title="📈 Gráfico de Evolução" defaultOpen={false}>
+              <div className="a-card">
+                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                  Controla quantas rodadas aparecem no gráfico "Evolução por Rodada" da aba Ranking.
+                </div>
+                <div className="a-row">
+                  <span className="a-lbl">Exibir:</span>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                    {([1,3,5,10,0] as const).map(val=>{
+                      const label = val===0?'Desde o início':val===1?'Última rodada':`Últimas ${val}`
+                      const active = evolucaoWindow === val
+                      return (
+                        <button key={val}
+                          onClick={()=>setEvolucaoWindow(val)}
+                          style={{
+                            fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,
+                            letterSpacing:1,padding:'7px 14px',borderRadius:6,cursor:'pointer',
+                            border:`1px solid ${active?C.gold:C.borderFaint}`,
+                            background: active?C.gold:'transparent',
+                            color: active?'#001a0a':C.textMuted,
+                            transition:'all .15s',
+                          }}>
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:C.textMuted,marginTop:8,lineHeight:1.5}}>
+                  {evolucaoWindow===0
+                    ? '📊 Mostrando todas as rodadas desde o início.'
+                    : evolucaoWindow===1
+                      ? '📊 Mostrando apenas a última rodada finalizada.'
+                      : `📊 Mostrando as últimas ${evolucaoWindow} rodadas finalizadas.`
+                  }
+                  {' '}Só o top 5 aparece para não poluir o gráfico.
                 </div>
               </div>
             </AdminSection>
@@ -3090,19 +3272,19 @@ function AdmsSection({ admins, C, dm }: any) {
         <div style={{padding:'16px 18px',background:'rgba(0,20,10,0.5)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:8,animation:'fadeSlideIn .2s ease both'}}>
           <div style={{display:'flex',flexDirection:'column' as const,gap:14}}>
             {admins.map((adm:any)=>(
-              <div key={adm.id} style={{background:dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.06)',border:`1px solid ${C.border}`,borderRadius:10,overflow:'hidden'}}>
+              <div key={adm.id} style={{background:dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.06)',border:`1px solid ${C.border}`,borderRadius:10,overflow:'hidden',display:'flex',alignItems:'flex-start',gap:0}}>
                 {adm.foto && (
-                  <div style={{width:'100%',aspectRatio:'4/3' as any,overflow:'hidden',background:'rgba(0,0,0,.2)'}}>
+                  <div style={{width:88,height:88,flexShrink:0,overflow:'hidden',background:'rgba(0,0,0,.2)'}}>
                     <img src={adm.foto} alt={adm.nome}
                       style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
                   </div>
                 )}
-                <div style={{padding:'14px 16px'}}>
-                  <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap' as const,marginBottom:6}}>
-                    <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:C.gold,letterSpacing:2}}>{adm.nome||'—'}</span>
-                    {adm.vulgo && <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:600,color:C.textMuted,letterSpacing:1}}>"{adm.vulgo}"</span>}
+                <div style={{padding:'12px 14px',flex:1,minWidth:0}}>
+                  <div style={{display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap' as const,marginBottom:4}}>
+                    <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:C.gold,letterSpacing:2}}>{adm.nome||'—'}</span>
+                    {adm.vulgo && <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,color:C.textMuted,letterSpacing:1}}>"{adm.vulgo}"</span>}
                   </div>
-                  {adm.descricao && <p style={{fontSize:13,color:C.text,lineHeight:1.6,margin:0}}>{adm.descricao}</p>}
+                  {adm.descricao && <p style={{fontSize:12,color:C.text,lineHeight:1.5,margin:0}}>{adm.descricao}</p>}
                 </div>
               </div>
             ))}
@@ -3263,7 +3445,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
 
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'16px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>📱 Instalar no Celular</div>
 
-      <GuiaItem title="Adicionar à tela inicial (app sem instalar)" icon="📲" defaultOpen={true}>
+      <GuiaItem title="Adicionar à tela inicial" icon="📲" defaultOpen={true}>
         <p style={{...guideTextStyle,marginBottom:14,color:C.textMuted}}>
           Adicionar o Palpitão à tela inicial deixa ele com cara de app — abre em tela cheia, sem barra do navegador. Selecione seu sistema:
         </p>

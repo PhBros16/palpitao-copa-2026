@@ -841,6 +841,7 @@ export default function Home() {
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
   const [logOpen, setLogOpen] = useState(false)
+  const [showResultados, setShowResultados] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirm, setResetConfirm] = useState('')
   const [resetMasterConfirm, setResetMasterConfirm] = useState('')
@@ -1729,6 +1730,52 @@ export default function Home() {
         {notif.type==='error'?'✕ ':'★ '}{notif.msg}
       </div>}
 
+      {/* Modal Resultados da Rodada */}
+      {showResultados && (()=>{
+        const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+        return (
+          <div className="modal-overlay open" onClick={()=>setShowResultados(false)}>
+            <div className="modal" style={{maxWidth:460,width:'95%',maxHeight:'85vh',overflow:'hidden',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexShrink:0}}>
+                <h3 style={{fontSize:18}}>📊 Resultados da Rodada</h3>
+                <button onClick={()=>setShowResultados(false)} style={{background:'transparent',border:'none',color:C.textMuted,fontSize:20,cursor:'pointer'}}>✕</button>
+              </div>
+              <div style={{overflowY:'auto',display:'flex',flexDirection:'column',gap:10,paddingRight:4}}>
+                {sortedForResult.map((m:any)=>{
+                  const res = state.results[m.id]
+                  if(!res||res.h===''||res.h===undefined) return (
+                    <div key={m.id} style={{background:dm?'rgba(255,255,255,.03)':'rgba(0,0,0,.03)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'12px 14px',opacity:.5}}>
+                      <div style={{fontSize:12,color:C.textMuted}}>{m.home} × {m.away}</div>
+                      <div style={{fontSize:11,color:C.textSub,marginTop:4}}>Aguardando resultado...</div>
+                    </div>
+                  )
+                  const myPal = state.palpites[currentUser!]?.[m.id]
+                  const pts = state.correctedScores[currentUser!]?.[m.id]
+                  const isExact = myPal&&myPal.h!==''&&myPal.h===res.h&&myPal.a===res.a
+                  return (
+                    <div key={m.id} style={{background:isExact?'rgba(0,166,81,.12)':dm?'rgba(0,30,15,.6)':'rgba(255,255,255,.8)',border:`1px solid ${isExact?'rgba(0,166,81,.4)':'rgba(212,175,55,.2)'}`,borderRadius:8,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+                      <div style={{flex:1,minWidth:100}}>
+                        <div style={{fontSize:11,color:C.textMuted,marginBottom:3}}>{m.home} × {m.away}</div>
+                        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:C.gold,letterSpacing:2,lineHeight:1}}>{res.h} × {res.a}</div>
+                      </div>
+                      {myPal&&myPal.h!==''&&(
+                        <div style={{textAlign:'center' as const}}>
+                          <div style={{fontSize:10,color:C.textMuted,marginBottom:2}}>Seu palpite</div>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:isExact?C.green:C.text}}>{myPal.h}×{myPal.a}</div>
+                        </div>
+                      )}
+                      {pts!==undefined&&(
+                        <span className={`pts-badge pts-${Math.min(pts,5)}`} style={{fontSize:14,padding:'4px 10px'}}>{pts}pt</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Modal PIN */}
       {showPinModal && pinTarget && <div className="modal-overlay open">
         <div className="modal">
@@ -1922,25 +1969,44 @@ export default function Home() {
                   </div>
 
                   {/* Pontuação em destaque (só para participantes) */}
-                  {!isAdmin && (
-                    <div style={{textAlign:'center',background:dm?'rgba(212,175,55,.08)':'rgba(212,175,55,.1)',border:`1px solid rgba(212,175,55,.25)`,borderRadius:10,padding:'14px 12px',marginBottom:14}}>
-                      <div style={{fontSize:11,color:C.textMuted,letterSpacing:2,textTransform:'uppercase',marginBottom:4}}>Minha Pontuação</div>
-                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:52,color:C.gold,lineHeight:1}}>{myTotal}</div>
-                      {myRoundPts > 0 && <div style={{fontSize:12,color:C.green,marginTop:2}}>+{myRoundPts} pts nesta rodada</div>}
-                      {myPos >= 0 && (
-                        <div style={{fontSize:12,color:C.textMuted,marginTop:4}}>
-                          {myPos === 0
-                            ? '🏆 Você é o líder!'
-                            : `${myPos+1}º lugar · ${ptsParaSubir} pts para subir`
-                          }
+                  {!isAdmin && (()=>{
+                    // Pontos de hoje: só jogos cujo horário é hoje
+                    const hoje = new Date()
+                    const ptsHoje = state.round.matches.reduce((acc:number, m:any)=>{
+                      const mt = parseMatchDateTime(m)
+                      if(!mt) return acc
+                      if(mt.getDate()===hoje.getDate()&&mt.getMonth()===hoje.getMonth()&&mt.getFullYear()===hoje.getFullYear()) {
+                        return acc + (state.correctedScores[currentUser!]?.[m.id]||0)
+                      }
+                      return acc
+                    }, 0)
+                    return (
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+                        <div style={{textAlign:'center',background:dm?'rgba(212,175,55,.08)':'rgba(212,175,55,.1)',border:`1px solid rgba(212,175,55,.25)`,borderRadius:10,padding:'14px 10px'}}>
+                          <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginBottom:4}}>Na Rodada</div>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:40,color:C.gold,lineHeight:1}}>{myRoundPts}</div>
+                          <div style={{fontSize:10,color:C.textMuted,marginTop:3}}>pts acumulados</div>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div style={{textAlign:'center',background:dm?'rgba(0,166,81,.07)':'rgba(0,166,81,.08)',border:`1px solid rgba(0,166,81,.25)`,borderRadius:10,padding:'14px 10px'}}>
+                          <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginBottom:4}}>Hoje</div>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:40,color:ptsHoje>0?C.green:C.textMuted,lineHeight:1}}>{ptsHoje}</div>
+                          <div style={{fontSize:10,color:C.textMuted,marginTop:3}}>
+                            {myPos === 0 ? '🏆 Líder!' : myPos >= 0 ? `${myPos+1}º · ${ptsParaSubir}pts p/ subir` : '—'}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {/* Info rápida */}
                   {(()=>{
-                    const meusPalpites = !isAdmin ? Object.keys(state.palpites[currentUser!]||{}).filter(id=>state.palpites[currentUser!][id]?.h!=='').length : 0
+                    // Cravei Quantos? = jogos com placar exato confirmado
+                    const cravados = !isAdmin ? state.round.matches.filter((m:any)=>{
+                      const pal = state.palpites[currentUser!]?.[m.id]
+                      const res = state.results[m.id]
+                      if(!pal||!res||pal.h===''||res.h===''||res.h===undefined) return false
+                      return pal.h===res.h && pal.a===res.a
+                    }).length : 0
                     return (
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                         <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
@@ -1952,9 +2018,9 @@ export default function Home() {
                           <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Jogos Abertos</div>
                         </div>
                         {!isAdmin && (
-                          <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${meusPalpites>0?'rgba(0,166,81,.35)':C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
-                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:meusPalpites>0?C.green:C.textMuted,lineHeight:1}}>{meusPalpites}</div>
-                            <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Cravei Quantas?</div>
+                          <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${cravados>0?'rgba(0,166,81,.35)':C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:cravados>0?C.green:C.textMuted,lineHeight:1}}>{cravados}</div>
+                            <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Cravei Quantos?</div>
                           </div>
                         )}
                         {isAdmin && (
@@ -2057,7 +2123,20 @@ export default function Home() {
 
           {/* ── PALPITES ── */}
           {activeTab==='palpites' && <div className="tab-content">
-            <div className="section-title">Meus Palpites</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap' as const,gap:8,marginBottom:4}}>
+              <div className="section-title" style={{marginBottom:0}}>Meus Palpites</div>
+              {(()=>{
+                const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+                const temResultado = sortedForResult.some((m:any)=>state.results[m.id]?.h!==undefined&&state.results[m.id]?.h!=='')
+                if(!temResultado) return null
+                return (
+                  <button className="btn-sm btn-outline" style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderColor:'rgba(212,175,55,.4)',color:C.gold}}
+                    onClick={()=>setShowResultados(true)}>
+                    📊 Ver Resultados
+                  </button>
+                )
+              })()}
+            </div>
             {!state.palpitesOpen&&<div className="a-warn">🔒 Palpites bloqueados. Aguarde a administração abrir.</div>}
 
             {/* Banner cômico: jogos travados sem palpite */}
@@ -2176,42 +2255,6 @@ export default function Home() {
               </span>}
             </div>}
 
-            {/* Resultados da Rodada */}
-            {(()=>{
-              const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
-              const temResultado = sortedForResult.some((m:any)=>state.results[m.id]?.h!==undefined&&state.results[m.id]?.h!=='')
-              if(!temResultado) return null
-              return (
-                <div style={{marginTop:16}}>
-                  <div className="section-title" style={{fontSize:16,marginBottom:10}}>📊 Resultados da Rodada</div>
-                  <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
-                    {sortedForResult.map((m:any)=>{
-                      const res = state.results[m.id]
-                      if(!res||res.h===''||res.h===undefined) return null
-                      const myPal = state.palpites[currentUser!]?.[m.id]
-                      const pts = state.correctedScores[currentUser!]?.[m.id]
-                      return (
-                        <div key={m.id} style={{background:dm?'rgba(0,30,15,.6)':'rgba(255,255,255,.8)',border:`1px solid rgba(212,175,55,.2)`,borderRadius:8,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
-                          <div style={{flex:1,minWidth:120}}>
-                            <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>{m.home} × {m.away}</div>
-                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.gold,letterSpacing:2}}>{res.h} × {res.a}</div>
-                          </div>
-                          {myPal&&myPal.h!==''&&(
-                            <div style={{textAlign:'center' as const}}>
-                              <div style={{fontSize:10,color:C.textMuted,marginBottom:2}}>Seu palpite</div>
-                              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.text}}>{myPal.h}×{myPal.a}</div>
-                            </div>
-                          )}
-                          {pts!==undefined&&(
-                            <span className={`pts-badge pts-${Math.min(pts,5)}`} style={{fontSize:14,padding:'4px 10px'}}>{pts}pt</span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })()}
           </div>}
 
           {/* ── GERAL ── */}
@@ -2508,8 +2551,7 @@ export default function Home() {
             <div className="a-warn">⚠ Área restrita — alterações afetam todos os participantes.</div>
 
             {/* Compartilhar no WhatsApp */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Compartilhar no WhatsApp</div>
+            <AdminSection title="📲 Compartilhar no WhatsApp" defaultOpen={true}>
               <div className="a-card">
                 <div style={{fontSize:12,color:C.textMuted,marginBottom:14,lineHeight:1.5}}>
                   Envie um resumo direto no WhatsApp. Escolha o que compartilhar:
@@ -2526,11 +2568,10 @@ export default function Home() {
                   A mensagem incluirá o top 5 e o link do AppWeb.
                 </div>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Configuração de Projeção */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">🔮 Projeção de Campeão</div>
+            <AdminSection title="🔮 Projeção de Campeão" defaultOpen={false}>
               <div className="a-card">
                 <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
                   Define quantas rodadas usar para calcular a projeção (%) na tabela de ranking.
@@ -2549,11 +2590,10 @@ export default function Home() {
                   ⚠ Requer mínimo de 2 rodadas finalizadas. Com menos de 2, aparece "—" na tabela.
                 </div>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Configuração da Rodada */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Configuração da Rodada</div>
+            <AdminSection title="⚙ Configuração da Rodada" defaultOpen={true}>
               <div className="a-card">
                 <div className="a-row">
                   <span className="a-lbl">Nome:</span>
@@ -2659,7 +2699,7 @@ export default function Home() {
                 <button className="btn-sm btn-green" onClick={finalizeRound}>✔ Finalizar Rodada</button>
                 <button className="btn-sm btn-danger" onClick={clearPalpites}>🗑 Limpar Palpites</button>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Resultado & Correção */}
             <AdminSection title="Resultado & Correção" defaultOpen={true}>
@@ -2775,8 +2815,7 @@ export default function Home() {
             </AdminSection>
 
             {/* Esquema de Pontuação */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Esquema de Pontuação</div>
+            <AdminSection title="📐 Esquema de Pontuação" defaultOpen={false}>
               {scoringPhases.map((ph:any,phIdx:number)=>(
                 <div key={ph.id} className="a-card">
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,flexWrap:'wrap',gap:8}}>
@@ -2808,11 +2847,10 @@ export default function Home() {
                 </div>
               </div>
               <div style={{marginTop:12}}><button className="btn-sm btn-gold" onClick={saveScoringConfig}>💾 Salvar Pontuação</button></div>
-            </div>
+            </AdminSection>
 
             {/* Pior Palpiteiro */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Pior Palpiteiro</div>
+            <AdminSection title="🤦 Pior Palpiteiro" defaultOpen={false}>
               <div className="a-card">
                 <div className="a-row"><span className="a-lbl">Nome:</span>
                   <select className="a-sel" value={shamePlayer} onChange={e=>setShamePlayer(e.target.value)}>
@@ -2834,11 +2872,10 @@ export default function Home() {
                   <button className="btn-sm btn-outline" onClick={()=>{setShamePlayer('');setShameUrl('');setShameText('')}}>Limpar</button>
                 </div>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Conheça os Adms */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Conheça os Adms</div>
+            <AdminSection title="👑 Conheça os Adms" defaultOpen={false}>
               <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
                 Esses dados aparecem na aba Guia para todos os participantes.
               </div>
@@ -2872,11 +2909,10 @@ export default function Home() {
                 <button className="add-btn" onClick={()=>setAdminsBuf(b=>[...b,{id:'adm_'+Date.now(),nome:'',vulgo:'',foto:'',descricao:''}])}>+ Adicionar Adm</button>
                 <button className="btn-sm btn-gold" onClick={saveAdmins}>💾 Salvar Adms</button>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Notificação Push */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Enviar Notificação Push</div>
+            <AdminSection title="🔔 Enviar Notificação Push" defaultOpen={false}>
               <div className="a-card">
                 <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
                   Envia uma notificação push para todos os participantes que ativaram as notificações.
@@ -2897,11 +2933,10 @@ export default function Home() {
                   <span style={{fontSize:11,color:C.textMuted}}>Só recebem quem ativou as notificações</span>
                 </div>
               </div>
-            </div>
+            </AdminSection>
 
             {/* Novidades */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Novidades</div>
+            <AdminSection title="🆕 Novidades" defaultOpen={false}>
               <div className="a-card">
                 <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
                   Publique uma novidade para aparecer como pop-up quando os participantes entrarem no app.
@@ -2934,7 +2969,7 @@ export default function Home() {
                   ))}
                 </div>
               )}
-            </div>
+            </AdminSection>
 
             {/* Log de Ações */}
             <div style={{marginBottom:24}}>
@@ -2982,8 +3017,7 @@ export default function Home() {
             </AdminSection>
 
             {/* Dados & Segurança */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Dados & Segurança</div>
+            <AdminSection title="🔒 Dados & Segurança" defaultOpen={false}>
               <div className="reset-box">
                 <div className="reset-title">🗑 Zerar Todos os Dados</div>
                 <div className="reset-desc">Apaga palpites, pontuações, resultados e histórico.<br/>Mantém: pontuação, senha admin e jogadores.</div>
@@ -2996,7 +3030,7 @@ export default function Home() {
                 <div style={{marginTop:10}}><button className="btn-sm btn-danger" onClick={changeAdminPass}>🔑 Alterar Senha</button></div>
                 <div style={{marginTop:8,fontSize:11,color:C.textMuted}}>A senha master nunca muda.</div>
               </div>
-            </div>
+            </AdminSection>
           </div>}
           </div>{/* fecha key={activeTab} */}
         </>}

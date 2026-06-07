@@ -365,69 +365,54 @@ function EvolucaoChart({ history, players, C }: any) {
 }
 
 // ── Pizza de distribuição de palpites ────────────────────────────────────────
-function PizzaDistribuicao({ matches, palpites, C, dm }: any) {
-  if(!matches||matches.length===0) return null
-
-  // Agrega para o primeiro jogo com palpites (o mais relevante)
-  const jogoComPalpites = matches.find((m:any)=>{
-    return Object.values(palpites).some((p:any)=>p[m.id]&&p[m.id].h!=='')
-  })
-  if(!jogoComPalpites) return null
-
-  const m = jogoComPalpites
+function PizzaSlice({ m, palpites, C, dm }: any) {
   let homeWin=0, draw=0, awayWin=0, total=0
   Object.values(palpites).forEach((p:any)=>{
-    const pal=p[m.id]
-    if(!pal||pal.h==='') return
-    const h=parseInt(pal.h), a=parseInt(pal.a)
-    if(isNaN(h)||isNaN(a)) return
+    const pal=p[m.id]; if(!pal||pal.h==='') return
+    const h=parseInt(pal.h), a=parseInt(pal.a); if(isNaN(h)||isNaN(a)) return
     total++
-    if(h>a) homeWin++
-    else if(h===a) draw++
-    else awayWin++
+    if(h>a) homeWin++; else if(h===a) draw++; else awayWin++
   })
   if(total===0) return null
-
-  const slices = [
-    {label:m.home, val:homeWin, color:'#D4AF37'},
-    {label:'Empate', val:draw, color:'#9b59b6'},
-    {label:m.away, val:awayWin, color:'#3498db'},
-  ].filter(s=>s.val>0)
-
-  // SVG pizza simples
-  const R=50, cx=60, cy=60
-  let cumAngle = -Math.PI/2
-  const paths: any[] = []
-  slices.forEach(s=>{
-    const angle = (s.val/total)*2*Math.PI
-    const x1=cx+R*Math.cos(cumAngle), y1=cy+R*Math.sin(cumAngle)
-    const x2=cx+R*Math.cos(cumAngle+angle), y2=cy+R*Math.sin(cumAngle+angle)
-    const large=angle>Math.PI?1:0
-    paths.push({...s, d:`M${cx},${cy} L${x1},${y1} A${R},${R},0,${large},1,${x2},${y2} Z`, pct:Math.round(s.val/total*100)})
-    cumAngle+=angle
-  })
-
+  const slices=[{label:m.home,val:homeWin,color:'#D4AF37'},{label:'Empate',val:draw,color:'#9b59b6'},{label:m.away,val:awayWin,color:'#3498db'}].filter(s=>s.val>0)
+  const R=40,cx=45,cy=45; let cumAngle=-Math.PI/2; const paths:any[]=[]
+  slices.forEach(s=>{ const angle=(s.val/total)*2*Math.PI; const x1=cx+R*Math.cos(cumAngle),y1=cy+R*Math.sin(cumAngle),x2=cx+R*Math.cos(cumAngle+angle),y2=cy+R*Math.sin(cumAngle+angle),large=angle>Math.PI?1:0; paths.push({...s,d:`M${cx},${cy} L${x1},${y1} A${R},${R},0,${large},1,${x2},${y2} Z`,pct:Math.round(s.val/total*100)}); cumAngle+=angle })
   return (
-    <div className="card" style={{marginBottom:16}}>
-      <div className="section-title" style={{fontSize:15,marginBottom:4}}>🗳 Distribuição de Palpites</div>
-      <div style={{fontSize:11,color:C.textMuted,marginBottom:10}}>{m.home} × {m.away}</div>
-      <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
-        <svg viewBox="0 0 120 120" style={{width:100,height:100,flexShrink:0}}>
+    <div style={{background:dm?'rgba(0,30,15,.5)':'rgba(0,60,30,.04)',border:`1px solid rgba(212,175,55,.15)`,borderRadius:8,padding:'12px 14px',marginBottom:10}}>
+      <div style={{fontSize:12,fontWeight:600,color:'#D4AF37',marginBottom:8,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:1}}>{m.home} × {m.away}</div>
+      <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+        <svg viewBox="0 0 90 90" style={{width:70,height:70,flexShrink:0}}>
           {paths.map((p,i)=><path key={i} d={p.d} fill={p.color} opacity={0.9}/>)}
-          <circle cx={cx} cy={cy} r={22} fill={dm?'#0a1f10':'#f0f7f0'}/>
-          <text x={cx} y={cy+4} textAnchor="middle" fontSize={11} fontWeight="bold" fill={dm?'#D4AF37':'#005a2a'}>{total}</text>
+          <circle cx={cx} cy={cy} r={16} fill={dm?'#0a1f10':'#f0f7f0'}/>
+          <text x={cx} y={cy+4} textAnchor="middle" fontSize={9} fontWeight="bold" fill={dm?'#D4AF37':'#005a2a'}>{total}</text>
         </svg>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        <div style={{display:'flex',flexDirection:'column' as const,gap:4}}>
           {paths.map((p,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:10,height:10,borderRadius:2,background:p.color,flexShrink:0}}/>
-              <span style={{fontSize:12,color:C.text}}>{p.label}</span>
-              <span style={{fontFamily:"'Bebas Neue'",fontSize:14,color:p.color,marginLeft:'auto'}}>{p.pct}%</span>
-              <span style={{fontSize:11,color:C.textMuted}}>({p.val})</span>
+            <div key={i} style={{display:'flex',alignItems:'center',gap:6}}>
+              <div style={{width:8,height:8,borderRadius:2,background:p.color,flexShrink:0}}/>
+              <span style={{fontSize:11,color:'#FAFAFA'}}>{p.label}</span>
+              <span style={{fontFamily:"'Bebas Neue'",fontSize:13,color:p.color,marginLeft:'auto'}}>{p.pct}%</span>
+              <span style={{fontSize:10,color:'rgba(255,255,255,.4)'}}>({p.val})</span>
             </div>
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+function PizzaDistribuicao({ matches, palpites, C, dm }: any) {
+  if(!matches||matches.length===0) return null
+  const jogosComPalpites = matches.filter((m:any)=>Object.values(palpites).some((p:any)=>p[m.id]&&p[m.id].h!==''))
+  if(jogosComPalpites.length===0) return null
+
+  return (
+    <div className="card" style={{marginBottom:16}}>
+      <div className="section-title" style={{fontSize:15,marginBottom:4}}>🗳 Distribuição de Palpites</div>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:12}}>{jogosComPalpites.length} jogo{jogosComPalpites.length!==1?'s':''} com palpites</div>
+      {jogosComPalpites.map((m:any)=>(
+        <PizzaSlice key={m.id} m={m} palpites={palpites} C={C} dm={dm}/>
+      ))}
     </div>
   )
 }
@@ -1426,7 +1411,12 @@ export default function Home() {
     }
     text += `\n👉 Confira a tabela completa no nosso AppWeb!`
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`
-    window.open(url, '_blank')
+    // Usar location.href em vez de window.open para evitar bug de tela branca no iOS
+    const a = document.createElement('a')
+    a.href = url
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.click()
   }
 
   if(loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#001a0a',color:'#D4AF37',fontFamily:'Barlow,sans-serif',fontSize:18}}>Carregando Palpitão...</div>
@@ -1487,7 +1477,7 @@ export default function Home() {
         .header-sub{font-size:12px;color:${dm?C.textMuted:'rgba(255,255,255,0.7)'};letter-spacing:2px;text-transform:uppercase;font-weight:300;}
         .trophy-line{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0 0;font-size:16px;overflow:hidden;}
         .theme-btn{position:absolute;right:16px;top:20px;background:${dm?'rgba(0,50,25,0.6)':'rgba(255,255,255,0.2)'};border:1px solid ${dm?C.border:'rgba(255,255,255,0.3)'};color:${dm?C.gold:'#fff'};font-size:16px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
-        #login-screen{min-height:calc(100vh - 120px);display:flex;align-items:center;justify-content:center;}
+        #login-screen{min-height:calc(100vh - 120px);display:flex;align-items:flex-start;justify-content:center;padding-top:20px;}
         .login-box{background:${C.bgPanel};border:var(--border-gold);border-radius:16px;padding:24px 20px;width:100%;max-width:420px;text-align:center;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
         .login-box h2{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:var(--gold);margin-bottom:6px;}
         .login-box p{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
@@ -1949,16 +1939,33 @@ export default function Home() {
                   )}
 
                   {/* Info rápida */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                    <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
-                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.text,lineHeight:1}}>{state.round.matches.length}</div>
-                      <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Jogos</div>
-                    </div>
-                    <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 12px',textAlign:'center'}}>
-                      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:jogosRestantes>0?C.gold:C.red,lineHeight:1}}>{jogosRestantes}</div>
-                      <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Abertos</div>
-                    </div>
-                  </div>
+                  {(()=>{
+                    const meusPalpites = !isAdmin ? Object.keys(state.palpites[currentUser!]||{}).filter(id=>state.palpites[currentUser!][id]?.h!=='').length : 0
+                    return (
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                        <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.text,lineHeight:1}}>{state.round.matches.length}</div>
+                          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Jogos Totais</div>
+                        </div>
+                        <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:jogosRestantes>0?C.gold:C.red,lineHeight:1}}>{jogosRestantes}</div>
+                          <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Jogos Abertos</div>
+                        </div>
+                        {!isAdmin && (
+                          <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${meusPalpites>0?'rgba(0,166,81,.35)':C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:meusPalpites>0?C.green:C.textMuted,lineHeight:1}}>{meusPalpites}</div>
+                            <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Cravei Quantas?</div>
+                          </div>
+                        )}
+                        {isAdmin && (
+                          <div style={{background:dm?'rgba(0,40,20,.5)':'rgba(0,80,40,.06)',border:`1px solid ${C.borderFaint}`,borderRadius:8,padding:'10px 8px',textAlign:'center'}}>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.textMuted,lineHeight:1}}>{PLAYERS.filter(p=>state.palpites[p]&&Object.keys(state.palpites[p]).length>0).length}</div>
+                            <div style={{fontSize:9,color:C.textMuted,letterSpacing:1,textTransform:'uppercase',marginTop:2}}>Palpitaram</div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Próximo jogo countdown */}
                   {proximoCountdown && (
@@ -2168,17 +2175,57 @@ export default function Home() {
                 Último: {new Date(state.palpiteTimes[currentUser!]).toLocaleString('pt-BR')}
               </span>}
             </div>}
+
+            {/* Resultados da Rodada */}
+            {(()=>{
+              const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+              const temResultado = sortedForResult.some((m:any)=>state.results[m.id]?.h!==undefined&&state.results[m.id]?.h!=='')
+              if(!temResultado) return null
+              return (
+                <div style={{marginTop:16}}>
+                  <div className="section-title" style={{fontSize:16,marginBottom:10}}>📊 Resultados da Rodada</div>
+                  <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                    {sortedForResult.map((m:any)=>{
+                      const res = state.results[m.id]
+                      if(!res||res.h===''||res.h===undefined) return null
+                      const myPal = state.palpites[currentUser!]?.[m.id]
+                      const pts = state.correctedScores[currentUser!]?.[m.id]
+                      return (
+                        <div key={m.id} style={{background:dm?'rgba(0,30,15,.6)':'rgba(255,255,255,.8)',border:`1px solid rgba(212,175,55,.2)`,borderRadius:8,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+                          <div style={{flex:1,minWidth:120}}>
+                            <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>{m.home} × {m.away}</div>
+                            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.gold,letterSpacing:2}}>{res.h} × {res.a}</div>
+                          </div>
+                          {myPal&&myPal.h!==''&&(
+                            <div style={{textAlign:'center' as const}}>
+                              <div style={{fontSize:10,color:C.textMuted,marginBottom:2}}>Seu palpite</div>
+                              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.text}}>{myPal.h}×{myPal.a}</div>
+                            </div>
+                          )}
+                          {pts!==undefined&&(
+                            <span className={`pts-badge pts-${Math.min(pts,5)}`} style={{fontSize:14,padding:'4px 10px'}}>{pts}pt</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
           </div>}
 
           {/* ── GERAL ── */}
           {activeTab==='geral'&&<div>
             <div className="section-title">Tabela Geral</div>
             <div className="section-sub">Palpites da rodada atual</div>
+            {(()=>{
+              const sortedMatches = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+              return (
             <div className="table-wrap">
               <table className="dt">
                 <thead><tr>
                   <th>Participante</th>
-                  {state.round.matches.map((m:any)=><th key={m.id} className="c" style={{minWidth:80}}>{m.home}<br/><span style={{fontSize:10,color:dm?'rgba(212,175,55,.4)':'rgba(0,100,50,.4)'}}>x</span><br/>{m.away}</th>)}
+                  {sortedMatches.map((m:any)=><th key={m.id} className="c" style={{minWidth:80}}>{m.home}<br/><span style={{fontSize:10,color:dm?'rgba(212,175,55,.4)':'rgba(0,100,50,.4)'}}>x</span><br/>{m.away}</th>)}
                   <th className="r">Pts</th><th className="r">Hora</th>
                 </tr></thead>
                 <tbody>
@@ -2188,7 +2235,7 @@ export default function Home() {
                     const roundPts=Object.values(state.correctedScores[p]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number
                     return <tr key={p}>
                       <td style={{minWidth:100}}>{p}</td>
-                      {state.round.matches.map((m:any)=>{
+                      {sortedMatches.map((m:any)=>{
                         const myPal=pal[m.id]
                         if(!myPal||myPal.h==='') return <td key={m.id} className="c"><span style={{color:C.textSub}}>—</span></td>
                         const pts=state.correctedScores[p]?.[m.id]??null
@@ -2204,6 +2251,8 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
+              )
+            })()}
           </div>}
 
           {/* ── RANKING ── */}
@@ -2613,8 +2662,7 @@ export default function Home() {
             </div>
 
             {/* Resultado & Correção */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">Resultado & Correção</div>
+            <AdminSection title="Resultado & Correção" defaultOpen={true}>
               <div className="a-card">
                 {state.round.matches.map((m:any)=>(
                   <div key={m.id} style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.borderFaint}`}}>
@@ -2724,7 +2772,7 @@ export default function Home() {
                   )
                 })()}
               </div>
-            </div>
+            </AdminSection>
 
             {/* Esquema de Pontuação */}
             <div style={{marginBottom:24}}>
@@ -2922,19 +2970,16 @@ export default function Home() {
             </div>
 
             {/* PINs dos Jogadores */}
-            <div style={{marginBottom:24}}>
-              <div className="section-title">🔐 PINs dos Jogadores</div>
-              <div className="a-card">
-                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
-                  Configure um PIN para cada jogador. Quem tiver PIN precisará digitá-lo ao entrar. Deixe em branco para remover.
-                </div>
-                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
-                  {PLAYERS.map(p=>(
-                    <PinRow key={p} player={p} hasPin={!!(state.playerPins?.[p])} onSave={(pin:string)=>savePlayerPin(p,pin)} C={C}/>
-                  ))}
-                </div>
+            <AdminSection title="🔐 PINs dos Jogadores" defaultOpen={false}>
+              <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                Configure um PIN para cada jogador. Quem tiver PIN precisará digitá-lo ao entrar. Deixe em branco para remover.
               </div>
-            </div>
+              <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                {PLAYERS.map(p=>(
+                  <PinRow key={p} player={p} hasPin={!!(state.playerPins?.[p])} onSave={(pin:string)=>savePlayerPin(p,pin)} C={C}/>
+                ))}
+              </div>
+            </AdminSection>
 
             {/* Dados & Segurança */}
             <div style={{marginBottom:24}}>
@@ -2957,6 +3002,24 @@ export default function Home() {
         </>}
       </div>{/* fecha app */}
     </>
+  )
+}
+
+function AdminSection({ title, children, defaultOpen=true }: any) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{marginBottom:24}}>
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
+          background:'transparent',border:'none',padding:'0 0 8px 0',cursor:'pointer',gap:10}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:3,color:'var(--gold)',display:'flex',alignItems:'center',gap:10,flex:1}}>
+          {title}
+          <span style={{flex:1,height:1,background:`linear-gradient(to right,rgba(212,175,55,.4),transparent)`,display:'block'}}/>
+        </div>
+        <span style={{color:'var(--gold)',fontSize:18,transition:'transform .2s',transform:open?'rotate(180deg)':'none',flexShrink:0}}>▾</span>
+      </button>
+      {open && <div style={{animation:'fadeSlideIn .18s ease both'}}>{children}</div>}
+    </div>
   )
 }
 

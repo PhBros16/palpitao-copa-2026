@@ -156,6 +156,7 @@ function defaultState(): any {
     novidades:[] as any[],
     admins:[] as any[],
     adminLog:[] as any[],
+    playerPins:{} as Record<string,string>,
   }
 }
 
@@ -634,6 +635,48 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
         const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])
         return sorted[sorted.length-1]?.[0] !== player
     })},
+
+    // ── Novos troféus ──
+    { icon:'🧮', label:'O Contador',           desc:'Acertou o saldo de gols em 10+ jogos sem acertar o placar exato', raro:false, unlocked: (()=>{
+        let cnt=0
+        history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) })
+        return cnt>=10
+    })()},
+    { icon:'⚰️', label:'Zero a Zero',          desc:'Apostou 0x0 em 3+ jogos ao longo da competição', raro:false, unlocked: (()=>{
+        let cnt=0
+        history.forEach((r:any)=>{ Object.values(r.palpites?.[player]||{}).forEach((pal:any)=>{ if(pal&&pal.h==='0'&&pal.a==='0') cnt++ }) })
+        return cnt>=3
+    })()},
+    { icon:'🦜', label:'O Papagaio',           desc:'Apostou igual ao líder do ranking em todos os jogos de uma rodada', raro:false, unlocked: (()=>{
+        return history.some((r:any)=>{
+          const lider = Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]
+          if(!lider||lider===player) return false
+          const myPals = r.palpites?.[player]||{}
+          const liderPals = r.palpites?.[lider]||{}
+          const ids = Object.keys(myPals).filter(id=>myPals[id]&&myPals[id].h!=='')
+          if(ids.length<2) return false
+          return ids.every(id=>liderPals[id]&&myPals[id].h===liderPals[id].h&&myPals[id].a===liderPals[id].a)
+        })
+    })()},
+    { icon:'🏁', label:'Resistente',           desc:'Participou de todas as rodadas sem faltar nenhuma', raro:false, unlocked: history.length>=5 && s.faltouPalpitar===0 },
+    { icon:'📊', label:'O Consistente',        desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada', raro:true, unlocked: (()=>{
+        if(history.length<3) return false
+        return history.every((r:any)=>{
+          const pts = r.scores?.[player]??0
+          const all = Object.values(r.scores||{}) as number[]
+          if(all.length<2) return true
+          const media = all.reduce((a:number,b:number)=>a+b,0)/all.length
+          return pts>=media
+        })
+    })()},
+    { icon:'🎪', label:'O Showman',            desc:'Acertou um placar com 5+ gols no total', raro:true, unlocked: history.some((r:any)=>{
+        return Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 })
+    })},
+    { icon:'🤡', label:'Flamenguista',         desc:'Apostou na vitória do Brasil em todos os jogos que o Brasil jogou', raro:false, unlocked: (()=>{
+        let totalBrasil=0, apostouVitoria=0
+        history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const m = r.matches?.find((x:any)=>x.id===id); if(!m) return; const isBrasil = ['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)||m.away?.toLowerCase().includes(b)); if(!isBrasil) return; totalBrasil++; const pal=r.palpites?.[player]?.[id]; if(!pal||pal.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a); const brasilEhCasa=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)); if(brasilEhCasa&&ph>pa) apostouVitoria++; else if(!brasilEhCasa&&pa>ph) apostouVitoria++ }) })
+        return totalBrasil>=3&&apostouVitoria===totalBrasil
+    })()},
   ]
 
   return todos
@@ -658,7 +701,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm }: any) {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:10,marginBottom:16}}>
         {[
           {val:s.rodadas,  label:'Rodadas', color:C.gold},
-          {val:s.exatos,   label:'Exatos',  color:'#00c060'},
+          {val:s.exatos,   label:'Cravadas',  color:'#00c060'},
           {val:s.vencedor, label:'Vencedor',color:'#3498db'},
           {val:s.saldo,    label:'Saldo',   color:'#e67e22'},
         ].map(({val,label,color})=>(
@@ -808,6 +851,11 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('home')
   const [darkMode, setDarkMode] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pinTarget, setPinTarget] = useState<string|null>(null)
+  const [pinInput, setPinInput] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [logOpen, setLogOpen] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirm, setResetConfirm] = useState('')
   const [resetMasterConfirm, setResetMasterConfirm] = useState('')
@@ -876,6 +924,7 @@ export default function Home() {
       if(!s.novidades) s.novidades=[]
       if(!s.admins) s.admins=[]
       if(!s.adminLog) s.adminLog=[]
+      if(!s.playerPins) s.playerPins={}
       if(s.round?.matches) {
         s.round.matches = s.round.matches.map((m:any)=>({
           date: m.date ?? '',
@@ -936,6 +985,15 @@ export default function Home() {
   },[showNotif])
 
   function loginAsPlayer(name: string) {
+    if(!state) return
+    if(state.playerPins?.[name]) {
+      setPinTarget(name); setPinInput(''); setPinError(''); setShowPinModal(true)
+      return
+    }
+    doLoginAsPlayer(name)
+  }
+
+  function doLoginAsPlayer(name: string) {
     setCurrentUser(name); setIsAdmin(false); setAuthPassword(''); setActiveTab('home')
     if(state) {
       const myPal = state.palpites[name]||{}
@@ -954,6 +1012,24 @@ export default function Home() {
         }
       }
     }
+  }
+
+  function checkPin() {
+    if(!pinTarget||!state) return
+    if(pinInput === state.playerPins[pinTarget]) {
+      setShowPinModal(false); setPinTarget(null); setPinInput(''); setPinError('')
+      doLoginAsPlayer(pinTarget)
+    } else { setPinError('PIN incorreto. Tente novamente.') }
+  }
+
+  async function savePlayerPin(player: string, pin: string) {
+    if(!state) return
+    const newState = JSON.parse(JSON.stringify(state))
+    if(!newState.playerPins) newState.playerPins={}
+    if(pin.trim()==='') delete newState.playerPins[player]
+    else newState.playerPins[player] = pin.trim()
+    await saveState(newState, authPassword)
+    showNotif(pin.trim()==='' ? `PIN de ${player} removido.` : `PIN de ${player} salvo!`)
   }
 
   function checkAdminPass() {
@@ -1663,6 +1739,26 @@ export default function Home() {
         {notif.type==='error'?'✕ ':'★ '}{notif.msg}
       </div>}
 
+      {/* Modal PIN */}
+      {showPinModal && pinTarget && <div className="modal-overlay open">
+        <div className="modal">
+          <h3>🔐 Área Segura</h3>
+          <p style={{fontSize:13,color:C.textMuted,marginBottom:14}}>
+            Digite o PIN de <b style={{color:C.gold}}>{pinTarget}</b> para entrar:
+          </p>
+          <input type="password" inputMode="numeric" value={pinInput}
+            onChange={e=>setPinInput(e.target.value)}
+            onKeyDown={e=>e.key==='Enter'&&checkPin()}
+            placeholder="••••" autoFocus maxLength={8}
+            style={{letterSpacing:6,textAlign:'center'}}/>
+          <div className="modal-error">{pinError}</div>
+          <div className="modal-btns">
+            <button className="btn-secondary" onClick={()=>{setShowPinModal(false);setPinTarget(null);setPinInput('');setPinError('')}}>Cancelar</button>
+            <button className="btn-primary" onClick={checkPin}>Entrar</button>
+          </div>
+        </div>
+      </div>}
+
       {/* Modal Admin */}
       {showModal && <div className="modal-overlay open">
         <div className="modal">
@@ -1992,7 +2088,7 @@ export default function Home() {
 
             {state.round.matches.length===0&&<div style={{color:C.textMuted,fontSize:13,padding:'20px 0'}}>Nenhum jogo configurado. Aguarde a administração.</div>}
 
-            {state.round.matches.map((m:any,idx:number)=>{
+            {[...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any,idx:number)=>{
               const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
               const locked=!state.palpitesOpen||isMatchLocked(m,idx)
               const diffMs = getCountdownMs(m, idx)
@@ -2113,7 +2209,7 @@ export default function Home() {
           {/* ── RANKING ── */}
           {activeTab==='ranking'&&<div className="tab-content">
             <div className="section-title">Ranking Geral</div>
-            <div className="section-sub">Pontuação acumulada · desempate por placares exatos e resultados corretos</div>
+            <div className="section-sub">Pontuação acumulada · desempate por cravadas e resultados corretos</div>
 
             {/* Pódio no ranking quando há histórico */}
             {state.roundHistory.length > 0 && (()=>{
@@ -2136,7 +2232,7 @@ export default function Home() {
                       <th style={{width:40}}>#</th>
                       <th>Participante</th>
                       <th className="r">Pontos</th>
-                      <th className="r">Exatos</th>
+                      <th className="r">Cravadas</th>
                       <th className="r">Vencedor</th>
                       <th className="r">Saldo</th>
                       <th className="r" style={{color:'#9b59b6'}}>Projeção</th>
@@ -2794,21 +2890,49 @@ export default function Home() {
 
             {/* Log de Ações */}
             <div style={{marginBottom:24}}>
-              <div className="section-title">📋 Log de Ações</div>
-              <div className="a-card" style={{padding:0,overflow:'hidden'}}>
-                {(state.adminLog||[]).length===0
-                  ? <div style={{padding:'16px',fontSize:13,color:C.textMuted,textAlign:'center'}}>Nenhuma ação registrada ainda.</div>
-                  : <div style={{maxHeight:260,overflowY:'auto'}}>
-                      {(state.adminLog||[]).map((log:any, i:number)=>(
-                        <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start',padding:'10px 14px',borderBottom:`1px solid ${C.borderFaint}`,background:i%2===0?'transparent':dm?'rgba(255,255,255,.02)':'rgba(0,0,0,.02)'}}>
-                          <div style={{fontSize:10,color:C.textMuted,whiteSpace:'nowrap',flexShrink:0,paddingTop:1}}>
-                            {new Date(log.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+              <button onClick={()=>setLogOpen(v=>!v)}
+                style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',
+                  background:logOpen?'rgba(212,175,55,.1)':'rgba(212,175,55,.05)',
+                  border:`1px solid ${logOpen?'rgba(212,175,55,.4)':'rgba(212,175,55,.2)'}`,
+                  borderRadius:8,padding:'12px 16px',cursor:'pointer',transition:'all .2s',marginBottom:logOpen?8:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <span style={{fontSize:18}}>📋</span>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.gold,letterSpacing:2}}>Log de Ações</div>
+                  <span style={{fontSize:11,color:C.textMuted}}>({(state.adminLog||[]).length} registros)</span>
+                </div>
+                <span style={{color:C.gold,fontSize:18,transition:'transform .2s',transform:logOpen?'rotate(180deg)':'none'}}>▾</span>
+              </button>
+              {logOpen && (
+                <div style={{background:C.bgAdminCard,border:`1px solid ${C.border}`,borderRadius:8,overflow:'hidden',animation:'fadeSlideIn .2s ease both'}}>
+                  {(state.adminLog||[]).length===0
+                    ? <div style={{padding:'16px',fontSize:13,color:C.textMuted,textAlign:'center'}}>Nenhuma ação registrada ainda.</div>
+                    : <div style={{maxHeight:260,overflowY:'auto'}}>
+                        {(state.adminLog||[]).map((log:any, i:number)=>(
+                          <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start',padding:'10px 14px',borderBottom:`1px solid ${C.borderFaint}`,background:i%2===0?'transparent':dm?'rgba(255,255,255,.02)':'rgba(0,0,0,.02)'}}>
+                            <div style={{fontSize:10,color:C.textMuted,whiteSpace:'nowrap',flexShrink:0,paddingTop:1}}>
+                              {new Date(log.ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                            </div>
+                            <div style={{fontSize:12,color:C.text,lineHeight:1.4}}>{log.action}</div>
                           </div>
-                          <div style={{fontSize:12,color:C.text,lineHeight:1.4}}>{log.action}</div>
-                        </div>
-                      ))}
-                    </div>
-                }
+                        ))}
+                      </div>
+                  }
+                </div>
+              )}
+            </div>
+
+            {/* PINs dos Jogadores */}
+            <div style={{marginBottom:24}}>
+              <div className="section-title">🔐 PINs dos Jogadores</div>
+              <div className="a-card">
+                <div style={{fontSize:12,color:C.textMuted,marginBottom:12,lineHeight:1.5}}>
+                  Configure um PIN para cada jogador. Quem tiver PIN precisará digitá-lo ao entrar. Deixe em branco para remover.
+                </div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                  {PLAYERS.map(p=>(
+                    <PinRow key={p} player={p} hasPin={!!(state.playerPins?.[p])} onSave={(pin:string)=>savePlayerPin(p,pin)} C={C}/>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2836,27 +2960,45 @@ export default function Home() {
   )
 }
 
-// ── ABA GUIA ────────────────────────────────────────────────────────────────
-function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, requestPushPermission, pushStatus }: any) {
-  const [osTab, setOsTab] = useState<'android'|'iphone'>('android')
-  const admins: any[] = state?.admins || []
-
+function PinRow({ player, hasPin, onSave, C }: any) {
+  const [localPin, setLocalPin] = useState('')
   return (
-    <div>
-      <div style={{background:dm?'linear-gradient(135deg,rgba(0,60,30,.7),rgba(0,30,60,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,30,80,.05))',border:`1px solid ${C.border}`,borderRadius:8,padding:20,marginBottom:20,textAlign:'center'}}>
-        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:4,color:C.gold,marginBottom:6}}>📖 GUIA DO PALPITÃO</div>
-        <div style={{fontSize:13,color:C.textMuted,lineHeight:1.5}}>Tudo que você precisa saber para palpitar, pontuar e ganhar 🏆</div>
-      </div>
+    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' as const}}>
+      <span style={{fontSize:13,color:C.text,minWidth:120,flex:1}}>{player}</span>
+      {hasPin && <span style={{fontSize:10,color:C.green,background:'rgba(0,166,81,.15)',border:'1px solid rgba(0,166,81,.3)',borderRadius:4,padding:'2px 6px',letterSpacing:1}}>PIN ativo</span>}
+      <input className="a-in sm" type="password" inputMode="numeric" maxLength={8}
+        value={localPin} onChange={e=>setLocalPin(e.target.value)}
+        placeholder={hasPin?'••••':'sem PIN'}
+        style={{width:80,letterSpacing:3,textAlign:'center'}}/>
+      <button className="btn-sm btn-outline" style={{fontSize:11,padding:'5px 10px'}}
+        onClick={()=>{ onSave(localPin); setLocalPin('') }}>
+        {localPin.trim()===''&&hasPin?'Remover':'Salvar'}
+      </button>
+    </div>
+  )
+}
 
-      {/* ── Conheça os Adms ── */}
-      {admins.length > 0 && (
-        <div style={{marginBottom:24}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:16}}>👑 Conheça os Adms</div>
+function AdmsSection({ admins, C, dm }: any) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{marginBottom:16}}>
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:'100%',background:'rgba(0,40,20,0.6)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:8,padding:'14px 18px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',gap:10,marginBottom:open?8:0,transition:'all .2s'}}>
+        <span style={{display:'flex',alignItems:'center',gap:10,fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:600,letterSpacing:1,color:'#D4AF37'}}>
+          <span style={{fontSize:18}}>👑</span>Conheça os Adms
+        </span>
+        <span style={{color:'#D4AF37',fontSize:16,transition:'transform .2s',display:'inline-block',transform:open?'rotate(180deg)':'rotate(0deg)'}}>▾</span>
+      </button>
+      {open && (
+        <div style={{padding:'16px 18px',background:'rgba(0,20,10,0.5)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:8,animation:'fadeSlideIn .2s ease both'}}>
           <div style={{display:'flex',flexDirection:'column' as const,gap:14}}>
             {admins.map((adm:any)=>(
               <div key={adm.id} style={{background:dm?'rgba(0,40,20,.6)':'rgba(0,80,40,.06)',border:`1px solid ${C.border}`,borderRadius:10,overflow:'hidden'}}>
                 {adm.foto && (
-                  <img src={adm.foto} alt={adm.nome} style={{width:'100%',maxHeight:220,objectFit:'cover',display:'block'}}/>
+                  <div style={{width:'100%',aspectRatio:'4/3' as any,overflow:'hidden',background:'rgba(0,0,0,.2)'}}>
+                    <img src={adm.foto} alt={adm.nome}
+                      style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
+                  </div>
                 )}
                 <div style={{padding:'14px 16px'}}>
                   <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap' as const,marginBottom:6}}>
@@ -2869,6 +3011,26 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
             ))}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── ABA GUIA ────────────────────────────────────────────────────────────────
+function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, requestPushPermission, pushStatus }: any) {
+  const [osTab, setOsTab] = useState<'android'|'iphone'>('android')
+  const admins: any[] = state?.admins || []
+
+  return (
+    <div>
+      <div style={{background:dm?'linear-gradient(135deg,rgba(0,60,30,.7),rgba(0,30,60,.5))':'linear-gradient(135deg,rgba(0,80,40,.1),rgba(0,30,80,.05))',border:`1px solid ${C.border}`,borderRadius:8,padding:20,marginBottom:20,textAlign:'center'}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,letterSpacing:4,color:C.gold,marginBottom:6}}>📖 GUIA DO PALPITÃO</div>
+        <div style={{fontSize:13,color:C.textMuted,lineHeight:1.5}}>Tudo que você precisa saber para palpitar, pontuar e ganhar 🏆</div>
+      </div>
+
+      {/* ── Conheça os Adms — retrátil ── */}
+      {admins.length > 0 && (
+        <AdmsSection admins={admins} C={C} dm={dm}/>
       )}
 
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:600,letterSpacing:3,textTransform:'uppercase' as const,color:C.textMuted,padding:'12px 0 6px',borderBottom:`1px solid ${C.borderFaint}`,marginBottom:8}}>⚽ Pontuação</div>
@@ -2907,7 +3069,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
       <GuiaItem title="Como funciona o desempate?" icon="⚖️">
         <div style={guideTextStyle}>
           <p style={{marginBottom:10}}>Quando dois ou mais participantes têm a mesma pontuação total, o desempate segue esta ordem:</p>
-          <GuiaStep n={1} text="Maior número de placares exatos acertados (ex: acertou 2x1 quando o resultado foi 2x1)"/>
+          <GuiaStep n={1} text="Maior número de cravadas (placar exato acertado) (ex: acertou 2x1 quando o resultado foi 2x1)"/>
           <GuiaStep n={2} text="Maior número de resultados corretos (vencedor ou empate, independente do placar)"/>
           <GuiaStep n={3} text="Pedra, papel e tesoura ✂️ — pode o melhor vencer!"/>
         </div>
@@ -2921,7 +3083,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
           <div style={{display:'flex',flexDirection:'column' as const,gap:8,marginBottom:12}}>
             {[
               {col:'Pontos',      desc:'Total acumulado de todas as rodadas.',                                                                   color:'#D4AF37'},
-              {col:'Exatos',      desc:'Quantas vezes acertou o placar exato (ex: palpitou 2x1, resultado foi 2x1).',                          color:'#00c060'},
+              {col:'Cravadas',      desc:'Quantas cravadas (placar exato acertado) ao longo da competição.',                          color:'#00c060'},
               {col:'Vencedor',    desc:'Quantas vezes acertou quem venceu ou empate, mesmo sem acertar o placar.',                              color:'#3498db'},
               {col:'Saldo',       desc:'Quantas vezes acertou a diferença de gols sem acertar o placar exato.',                                 color:'#e67e22'},
               {col:'Projeção %',  desc:'Chance estimada de ser campeão baseada na média recente. Requer ao menos 2 rodadas finalizadas.',       color:'#9b59b6'},
@@ -2933,7 +3095,7 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
             ))}
           </div>
           <div style={guideTipStyle}>
-            ⚖️ <b>Desempate:</b> Exatos → Vencedor → Saldo
+            ⚖️ <b>Desempate:</b> Cravadas → Vencedor → Saldo
           </div>
         </div>
       </GuiaItem>

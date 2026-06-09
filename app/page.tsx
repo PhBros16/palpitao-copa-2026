@@ -1996,11 +1996,11 @@ export default function Home() {
         .match-card{background:${C.bgMatchCard};border:1px solid ${C.borderFaint};border-radius:var(--radius);padding:20px 18px;margin-bottom:10px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;box-shadow:${C.shadow};}
         .match-card.locked{opacity:.65;border-color:${dm?'rgba(192,57,43,.3)':'rgba(192,57,43,.4)'};}
         .match-teams{display:flex;flex-direction:column;align-items:center;width:100%;gap:8px;}
-        .match-row{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;}
-        .match-side{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:70px;}
-        .team-flag{font-size:40px;line-height:1;}.team-name{font-size:13px;font-weight:700;color:${C.text};text-align:center;word-break:break-word;max-width:80px;}
+        .match-row{display:flex;align-items:center;justify-content:center;width:100%;}
+        .match-side{display:flex;flex-direction:column;align-items:center;gap:6px;width:90px;flex-shrink:0;}
+        .team-flag{font-size:48px;line-height:1;}.team-name{font-size:13px;font-weight:700;color:${C.text};text-align:center;word-break:break-word;width:100%;}
         .vs-txt{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--gold);line-height:1;padding:0 4px;}
-        .score-grp{display:flex;align-items:center;justify-content:center;gap:8px;}
+        .score-grp{display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;}
         .score-in{width:60px;height:60px;background:${C.bgInput};border:1px solid ${dm?'rgba(212,175,55,.3)':C.border};color:${C.text};font-family:'Bebas Neue',sans-serif;font-size:28px;text-align:center;border-radius:8px;outline:none;}
         .score-in:focus{border-color:var(--gold);}
         .score-in:disabled{opacity:.4;cursor:not-allowed;}
@@ -2708,7 +2708,7 @@ export default function Home() {
                     {/* Escudo home */}
                     <div className="match-side">
                       {m.homeLogo
-                        ? <img src={m.homeLogo} alt={m.home} style={{width:48,height:48,objectFit:'contain'}}/>
+                        ? <img src={m.homeLogo} alt={m.home} style={{width:54,height:54,objectFit:'contain'}}/>
                         : <span className="team-flag">{m.homeFlag||'🏳'}</span>}
                       <span className="team-name">{m.home}</span>
                     </div>
@@ -2725,7 +2725,7 @@ export default function Home() {
                     {/* Escudo away */}
                     <div className="match-side">
                       {m.awayLogo
-                        ? <img src={m.awayLogo} alt={m.away} style={{width:48,height:48,objectFit:'contain'}}/>
+                        ? <img src={m.awayLogo} alt={m.away} style={{width:54,height:54,objectFit:'contain'}}/>
                         : <span className="team-flag">{m.awayFlag||'🏳'}</span>}
                       <span className="team-name">{m.away}</span>
                     </div>

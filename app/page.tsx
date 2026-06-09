@@ -700,105 +700,226 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
 
   const melhorMedia  = allPlayers.reduce((best,p) => allStats[p].mediaPts > (allStats[best]?.mediaPts||0) ? p : best, allPlayers[0])
   const maisEmpates  = allPlayers.reduce((best,p) => allStats[p].pctEmpate> (allStats[best]?.pctEmpate||0) ? p : best, allPlayers[0])
-  const maisUltimo   = allPlayers.reduce((best,p) => allStats[p].rodadasUltimo>(allStats[best]?.rodadasUltimo||0) ? p : best, allPlayers[0])
   const maisPrimeiro = allPlayers.reduce((best,p) => allStats[p].rodadasPrimeiro>(allStats[best]?.rodadasPrimeiro||0) ? p : best, allPlayers[0])
 
-  // ── TIER 1: Qualquer um pode ter (achievements de participação / comportamento) ──
+  // Helper: verifica se jogador palpitou numa rodada (tem ao menos 1 palpite válido)
+  const palpitou = (r:any) => Object.values(r.palpites?.[player]||{}).some((p:any)=>p&&p.h!=='')
+  // Helper: posição do jogador numa rodada (0-indexed)
+  const posicao = (r:any) => Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]).findIndex(([p])=>p===player)
+  // Helper: contagem de exatos numa rodada
+  const exatosNaRodada = (r:any) => { let cnt=0; Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a) cnt++ }); return cnt }
+  // Helper: rodadas consecutivas em último
+  const maxConsecUltimo = () => { let cur=0,max=0; history.forEach((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); if(sorted[sorted.length-1]?.[0]===player){cur++;if(cur>max)max=cur}else cur=0 }); return max }
+  // Helper: participou de todas as rodadas (tem palpite válido em todas)
+  const participouTodas = () => history.length>=1 && history.every((r:any)=>palpitou(r))
+  // Helper: nunca ficou em último (apenas em rodadas em que palpitou)
+  const nuncaUltimo = () => history.filter((r:any)=>palpitou(r)).every((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); return sorted[sorted.length-1]?.[0]!==player })
+
+  // ── TIER 1 — "Qualquer um tem, até você" ───────────────────────────────────
   type Trofeu = { icon:string; label:string; desc:string; tier:1|2|3|4; unlocked:boolean; newlyUnlocked?:boolean }
 
   const tier1: Trofeu[] = [
-    { icon:'🎯', tier:1, label:'Olho de Águia',   desc:'Acertou 3+ placares exatos na competição',
-      unlocked: s.exatos >= 3 },
-    { icon:'💪', tier:1, label:'Veterano',         desc:'Participou de 5+ rodadas',
+    { icon:'💪', tier:1, label:'Veterano',
+      desc:'Participou de 5+ rodadas.',
       unlocked: s.rodadas >= 5 },
-    { icon:'🧱', tier:1, label:'O Muralha',        desc:'3 rodadas seguidas sem zerar',
+
+    { icon:'🎯', tier:1, label:'Olho de Águia',
+      desc:'Acertou 3+ placares exatos na competição.',
+      unlocked: s.exatos >= 3 },
+
+    { icon:'🧱', tier:1, label:'O Muralha',
+      desc:'3 rodadas seguidas sem zerar.',
       unlocked: s.maxSeriaSemZero >= 3 },
-    { icon:'📈', tier:1, label:'Virada de Mesa',   desc:'Subiu 3+ posições no ranking em uma rodada',
+
+    { icon:'📈', tier:1, label:'Virada de Mesa',
+      desc:'Subiu 3+ posições no ranking em uma rodada.',
       unlocked: s.maxSaltoPos >= 3 },
-    { icon:'🏁', tier:1, label:'Resistente',       desc:'Participou de todas as rodadas sem faltar nenhuma',
-      unlocked: history.length >= 5 && s.faltouPalpitar === 0 },
-    { icon:'🏳️', tier:1, label:'O Pacifista',     desc:'Apostou empate em mais da metade dos jogos de uma rodada',
+
+    { icon:'🏁', tier:1, label:'Resistente',
+      desc:'Palpitou em todas as rodadas sem faltar nenhuma (mín. 5).',
+      unlocked: history.length >= 5 && participouTodas() },
+
+    { icon:'🏳️', tier:1, label:'O Pacifista',
+      desc:'Apostou empate em mais da metade dos jogos de uma rodada.',
       unlocked: history.some((r:any)=>{
         const pals = Object.values(r.palpites?.[player]||{}).filter((p:any)=>p&&p.h!=='')
-        if((pals as any[]).length<2) return false
-        const empates = (pals as any[]).filter((p:any)=>p.h===p.a).length
-        return empates/(pals as any[]).length > 0.5
+        if((pals as any[]).length < 2) return false
+        return (pals as any[]).filter((p:any)=>p.h===p.a).length / (pals as any[]).length > 0.5
       })},
-    { icon:'⚰️', tier:1, label:'Zero a Zero',      desc:'Apostou 0x0 em 3+ jogos ao longo da competição',
+
+    { icon:'⚰️', tier:1, label:'Zero a Zero',
+      desc:'Apostou 0x0 em 3+ jogos ao longo da competição.',
       unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.values(r.palpites?.[player]||{}).forEach((pal:any)=>{ if(pal&&pal.h==='0'&&pal.a==='0') cnt++ }) }); return cnt>=3 })() },
-    { icon:'🐔', tier:1, label:'Galinha',           desc:'Nunca apostou mais de 2 gols totais num único jogo',
-      unlocked: s.rodadas>=3 && history.every((r:any)=>Object.values(r.palpites?.[player]||{}).every((p:any)=>!p||p.h===''||parseInt(p.h)+parseInt(p.a)<=2)) },
-    { icon:'😴', tier:1, label:'Dormiu no Ponto',   desc:'Perdeu o prazo de palpite em 3+ rodadas',
+
+    { icon:'🐔', tier:1, label:'Galinha',
+      desc:'Nunca apostou mais de 2 gols totais em nenhum jogo.',
+      unlocked: s.rodadas>=3 && history.filter((r:any)=>palpitou(r)).every((r:any)=>
+        Object.values(r.palpites?.[player]||{}).every((p:any)=>!p||p.h===''||parseInt(p.h)+parseInt(p.a)<=2)) },
+
+    { icon:'😴', tier:1, label:'Dormiu no Ponto',
+      desc:'Perdeu o prazo de palpite em 3+ rodadas.',
       unlocked: s.faltouPalpitar >= 3 },
-    { icon:'🗿', tier:1, label:'O Monólito',        desc:'Apostou o mesmo placar em todos os jogos de uma rodada',
+
+    { icon:'🗿', tier:1, label:'O Monólito',
+      desc:'Apostou o mesmo placar em todos os jogos de uma rodada.',
       unlocked: history.some((r:any)=>{
         const pals = Object.values(r.palpites?.[player]||{}).filter((p:any)=>p&&p.h!=='')
-        if((pals as any[]).length<2) return false
+        if((pals as any[]).length < 2) return false
         const primeiro = pals[0] as any
         return (pals as any[]).every((p:any)=>p.h===primeiro.h&&p.a===primeiro.a)
       })},
-    { icon:'🧮', tier:1, label:'O Contador',        desc:'Acertou o saldo de gols em 5+ jogos (sem acertar o placar exato)',
+
+    { icon:'🧮', tier:1, label:'O Contador',
+      desc:'Acertou o saldo de gols em 5+ jogos (sem acertar o placar exato).',
       unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=5 })() },
-    { icon:'🤡', tier:1, label:'Flamenguista',      desc:'Apostou na vitória do Brasil em todos os jogos do Brasil',
+
+    { icon:'🤡', tier:1, label:'Flamenguista',
+      desc:'Apostou na vitória do Brasil em todos os jogos do Brasil (mín. 3).',
       unlocked: (()=>{ let tot=0,vic=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const m=r.matches?.find((x:any)=>x.id===id); if(!m) return; const isBR=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)||m.away?.toLowerCase().includes(b)); if(!isBR) return; tot++; const pal=r.palpites?.[player]?.[id]; if(!pal||pal.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a); const casa=['brasil','brazil'].some(b=>m.home?.toLowerCase().includes(b)); if(casa&&ph>pa) vic++; else if(!casa&&pa>ph) vic++ }) }); return tot>=3&&vic===tot })() },
-    { icon:'💩', tier:1, label:'Lanterninha Raiz',  desc:'Ficou 3+ rodadas em último lugar',
-      unlocked: s.rodadasUltimo >= 3 && player === maisUltimo },
-    { icon:'📉', tier:1, label:'O Eterno Vice',     desc:'3+ rodadas em 2º sem nunca chegar ao 1º',
+
+    { icon:'📉', tier:1, label:'O Eterno Vice',
+      desc:'Ficou 3+ rodadas em 2º sem nunca ter chegado ao 1º.',
       unlocked: (()=>{ let vice=0; history.forEach((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); if(sorted[1]?.[0]===player) vice++ }); return vice>=3 && s.rodadasPrimeiro===0 })() },
-    { icon:'💀', tier:1, label:'O Otimista Trágico',desc:'Apostou goleada (5+ gols) 3x e nunca acertou',
+
+    { icon:'💀', tier:1, label:'O Otimista Trágico',
+      desc:'Apostou goleada (5+ gols) 3x e nunca acertou.',
       unlocked: s.goleadasApostadas>=3 && s.goleadasAcertadas===0 },
+
+    { icon:'🌧️', tier:1, label:'Maior Seca',
+      desc:'Ficou 3+ rodadas seguidas sem acertar nem um resultado.',
+      unlocked: (()=>{ let cur=0,max=0; history.forEach((r:any)=>{ const t=r.tiebreak?.[player]; const acertou=(t?.correct||0)>0; if(!acertou){cur++;if(cur>max)max=cur}else cur=0 }); return max>=3 })() },
+
+    { icon:'🎲', tier:1, label:'Na Sorte',
+      desc:'Acertou um placar sem ter palpitado em nenhum outro jogo da rodada.',
+      unlocked: history.some((r:any)=>{ const pals=Object.entries(r.palpites?.[player]||{}).filter(([,v]:any)=>v&&v.h!==''); return pals.length===1 && exatosNaRodada(r)===1 }) },
   ]
 
-  // ── TIER 2: Nem todo mundo tem (requerem desempenho acima da média) ──
+  // ── TIER 2 — "Rapaz, esse aqui é bom" ─────────────────────────────────────
   const tier2: Trofeu[] = [
-    { icon:'🔥', tier:2, label:'Em Chamas',       desc:'5+ rodadas no top 3',
-      unlocked: s.rodadasTop3 >= 5 },
-    { icon:'🌪️', tier:2, label:'Hat-trick',       desc:'3 placares exatos na mesma rodada',
-      unlocked: history.some((r:any)=>{ let cnt=0; Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a) cnt++ }); return cnt>=3 })},
-    { icon:'🧠', tier:2, label:'O Analista',      desc:'Maior média de pontos por rodada (mín. 3 rodadas)',
+    { icon:'🔥', tier:2, label:'Em Chamas',
+      desc:'4+ rodadas no top 3.',
+      unlocked: s.rodadasTop3 >= 4 },
+
+    { icon:'🌪️', tier:2, label:'Hat-trick',
+      desc:'3 placares exatos na mesma rodada.',
+      unlocked: history.some((r:any)=>exatosNaRodada(r)>=3) },
+
+    { icon:'🧠', tier:2, label:'O Analista',
+      desc:'Maior média de pontos por rodada entre todos (mín. 3 rodadas).',
       unlocked: s.rodadas>=3 && player===melhorMedia },
-    { icon:'📊', tier:2, label:'O Consistente',   desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada (mín. 3)',
-      unlocked: (()=>{ if(history.length<3) return false; return history.every((r:any)=>{ const pts=r.scores?.[player]??0; const all=Object.values(r.scores||{}) as number[]; if(all.length<2) return true; const media=all.reduce((a:number,b:number)=>a+b,0)/all.length; return pts>=media }) })() },
-    { icon:'🧊', tier:2, label:'Sangue Frio',     desc:'Acertou placar exato em jogo de mata-mata',
-      unlocked: history.some((r:any)=>{ if(!['oitavas','quartas','semi','final','3lugar','16avos','dezesseis'].includes((r.phase||'').toLowerCase())) return false; return Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a }) })},
-    { icon:'🦜', tier:2, label:'O Papagaio',      desc:'Apostou igual ao líder em todos os jogos de uma rodada',
-      unlocked: (()=>{ return history.some((r:any)=>{ const lider=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]; if(!lider||lider===player) return false; const myP=r.palpites?.[player]||{}; const lP=r.palpites?.[lider]||{}; const ids=Object.keys(myP).filter(id=>myP[id]&&myP[id].h!==''); if(ids.length<2) return false; return ids.every(id=>lP[id]&&myP[id].h===lP[id].h&&myP[id].a===lP[id].a) }) })() },
-    { icon:'🐢', tier:2, label:'Tartaruga',       desc:'Ficou 3 rodadas em último e conseguiu sair',
-      unlocked: s.rodadasUltimo>=3 && history.length>s.rodadasUltimo },
-    { icon:'🤝', tier:2, label:'Diplomata',       desc:'Apostou mais empates que qualquer outro participante',
+
+    { icon:'📊', tier:2, label:'O Consistente',
+      desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada (mín. 3).',
+      unlocked: (()=>{ if(history.length<3) return false; return history.filter((r:any)=>palpitou(r)).every((r:any)=>{ const pts=r.scores?.[player]??0; const all=Object.values(r.scores||{}) as number[]; if(all.length<2) return true; const media=all.reduce((a:number,b:number)=>a+b,0)/all.length; return pts>=media }) })() },
+
+    { icon:'🧊', tier:2, label:'Sangue Frio',
+      desc:'Acertou placar exato em jogo de mata-mata.',
+      unlocked: history.some((r:any)=>{ if(!['oitavas','quartas','semi','final','3lugar','16avos','dezesseis'].includes((r.phase||'').toLowerCase())) return false; return exatosNaRodada(r)>=1 })},
+
+    { icon:'🦜', tier:2, label:'O Papagaio',
+      desc:'Apostou igual ao líder em todos os jogos de uma rodada.',
+      unlocked: history.some((r:any)=>{ const lider=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]; if(!lider||lider===player) return false; const myP=r.palpites?.[player]||{}; const lP=r.palpites?.[lider]||{}; const ids=Object.keys(myP).filter(id=>myP[id]&&myP[id].h!==''); if(ids.length<2) return false; return ids.every(id=>lP[id]&&myP[id].h===lP[id].h&&myP[id].a===lP[id].a) }) },
+
+    { icon:'🐢', tier:2, label:'Tartaruga',
+      desc:'Ficou 2+ rodadas consecutivas em último e conseguiu sair.',
+      unlocked: (()=>{
+        if(history.length<3) return false
+        let consec=0
+        for(let i=0;i<history.length;i++){
+          const sorted=Object.entries(history[i].scores||{}).sort((a:any,b:any)=>b[1]-a[1])
+          if(sorted[sorted.length-1]?.[0]===player) { consec++ }
+          else { if(consec>=2) return true; consec=0 }
+        }
+        return false
+      })() },
+
+    { icon:'🤝', tier:2, label:'Diplomata',
+      desc:'Apostou mais empates que qualquer outro participante (mín. 3 rodadas).',
       unlocked: s.rodadas>=3 && player===maisEmpates },
-    { icon:'🎪', tier:2, label:'O Showman',       desc:'Acertou um placar com 5+ gols no total',
-      unlocked: history.some((r:any)=>Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 }))},
-    { icon:'👻', tier:2, label:'O Fantasma',      desc:'Não palpitou e mesmo assim não ficou em último',
-      unlocked: history.some((r:any)=>{ if(r.palpites?.[player]&&Object.keys(r.palpites[player]).length>0) return false; const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); return sorted[sorted.length-1]?.[0]!==player })},
+
+    { icon:'🎪', tier:2, label:'O Showman',
+      desc:'Acertou um placar com 5+ gols no total.',
+      unlocked: history.some((r:any)=>Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 })) },
+
+    { icon:'💩', tier:2, label:'Lanterninha Raiz',
+      desc:'Ficou 3+ rodadas em último lugar.',
+      // Corrigido: qualquer um com 3+ vezes em último, sem exigir ser o único
+      unlocked: s.rodadasUltimo >= 3 },
+
+    { icon:'🔄', tier:2, label:'Fênix',
+      desc:'Saiu do último lugar para o top 3 em uma única rodada.',
+      unlocked: (()=>{
+        for(let i=1;i<history.length;i++){
+          const prevSorted=Object.entries(history[i-1].scores||{}).sort((a:any,b:any)=>b[1]-a[1])
+          const curSorted =Object.entries(history[i  ].scores||{}).sort((a:any,b:any)=>b[1]-a[1])
+          const prevPos=prevSorted.findIndex(([p])=>p===player)
+          const curPos =curSorted .findIndex(([p])=>p===player)
+          if(prevPos===prevSorted.length-1 && curPos<=2) return true
+        }
+        return false
+      })() },
+
+    { icon:'🎩', tier:2, label:'O Mágico',
+      desc:'Acertou 4+ placares exatos em uma única rodada.',
+      unlocked: history.some((r:any)=>exatosNaRodada(r)>=4) },
+
+    { icon:'📌', tier:2, label:'Colado na Média',
+      desc:'Terminou uma rodada com exatamente a mesma pontuação que outro participante.',
+      unlocked: history.some((r:any)=>{ const pts=r.scores?.[player]; if(pts===undefined) return false; return Object.entries(r.scores||{}).some(([p,v])=>p!==player&&v===pts) }) },
   ]
 
-  // ── TIER 3: Levanta que é só seu (exclusivos, difíceis, únicos) ──
+  // ── TIER 3 — "Levanta que essa é só sua!" ─────────────────────────────────
   const tier3: Trofeu[] = [
-    { icon:'💎', tier:3, label:'Perfeição',        desc:'Acertou TODOS os placares de uma rodada (mín. 2 jogos)',
+    { icon:'💎', tier:3, label:'Perfeição',
+      desc:'Acertou TODOS os placares de uma rodada (mín. 2 jogos).',
       unlocked: history.some((r:any)=>{ const jogos=Object.keys(r.results||{}).filter(id=>r.results[id]?.h!==''); if(jogos.length<2) return false; return jogos.every(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; return pal&&res&&pal.h!==''&&pal.h===res.h&&pal.a===res.a }) })},
-    { icon:'🏆', tier:3, label:'Líder Absoluto',   desc:'Ficou mais rodadas em 1º lugar que qualquer outro',
-      unlocked: s.rodadasPrimeiro>=2 && player===maisPrimeiro },
-    { icon:'⚡', tier:3, label:'Relâmpago',        desc:'10+ placares exatos ao longo de toda a competição',
-      unlocked: s.exatos >= 10 },
-    { icon:'🦅', tier:3, label:'O Predador',       desc:'Top 3 em todas as rodadas sem exceção (mín. 4 rodadas)',
-      unlocked: history.length>=4 && s.faltouPalpitar===0 && history.every((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); const pos=sorted.findIndex(([p])=>p===player); return pos<=2 })},
-    { icon:'🎖️', tier:3, label:'Invicto',          desc:'Nunca ficou em último em nenhuma rodada (mín. 5 rodadas)',
-      unlocked: history.length>=5 && s.faltouPalpitar===0 && history.every((r:any)=>{ const sorted=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1]); return sorted[sorted.length-1]?.[0]!==player })},
-    { icon:'🧿', tier:3, label:'Saldo Perfeito',   desc:'Acertou o saldo de gols em 15+ jogos na competição',
-      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=15 })() },
+
+    { icon:'🏆', tier:3, label:'Líder Absoluto',
+      desc:'Ficou mais rodadas em 1º lugar que qualquer outro (mín. 3 vezes).',
+      unlocked: s.rodadasPrimeiro>=3 && player===maisPrimeiro },
+
+    { icon:'⚡', tier:3, label:'Relâmpago',
+      desc:'7+ placares exatos ao longo de toda a competição.',
+      unlocked: s.exatos >= 7 },
+
+    { icon:'🦅', tier:3, label:'O Predador',
+      desc:'Top 3 em todas as rodadas sem exceção (mín. 4 rodadas).',
+      unlocked: (()=>{
+        const rodadasComPalpite = history.filter((r:any)=>palpitou(r))
+        return rodadasComPalpite.length>=4 && rodadasComPalpite.every((r:any)=>posicao(r)<=2)
+      })() },
+
+    { icon:'🎖️', tier:3, label:'Invicto',
+      desc:'Nunca ficou em último em nenhuma rodada (mín. 5 rodadas).',
+      unlocked: history.filter((r:any)=>palpitou(r)).length>=5 && nuncaUltimo() },
+
+    { icon:'🧿', tier:3, label:'Saldo Perfeito',
+      desc:'Acertou o saldo de gols em 10+ jogos na competição.',
+      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=10 })() },
+
+    { icon:'🔮', tier:3, label:'Vidente',
+      desc:'Acertou o placar exato de 2+ jogos diferentes de mata-mata.',
+      unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ if(!['oitavas','quartas','semi','final','3lugar','16avos','dezesseis'].includes((r.phase||'').toLowerCase())) return; cnt+=exatosNaRodada(r) }); return cnt>=2 })() },
+
+    { icon:'🧲', tier:3, label:'Implacável',
+      desc:'5+ rodadas consecutivas no top 3.',
+      unlocked: (()=>{ let cur=0,max=0; history.forEach((r:any)=>{ if(!palpitou(r)) return; if(posicao(r)<=2){cur++;if(cur>max)max=cur}else cur=0 }); return max>=5 })() },
+
+    { icon:'🎯', tier:3, label:'Franco Atirador',
+      desc:'12+ placares exatos ao longo de toda a competição.',
+      unlocked: s.exatos >= 12 },
   ]
 
-  // ── TIER 4: Troféu Épico — Campeão! ──
-  // Quem tem mais pontos totais ao final (só desbloqueado se há pelo menos 3 rodadas)
+  // ── TIER 4 — ÉPICO ─────────────────────────────────────────────────────────
   const tier4: Trofeu[] = [
-    { icon:'👑', tier:4, label:'CAMPEÃO!', desc:'O maior pontuador de toda a competição. Eterno!',
+    { icon:'👑', tier:4, label:'CAMPEÃO!',
+      desc:'O maior pontuador de toda a competição. Eterno.',
       unlocked: (()=>{
         if(history.length < 3) return false
-        const totalPts: Record<string,number> = {}
-        allPlayers.forEach(p=>{ totalPts[p]=allStats[p].totalPts })
-        const lider = allPlayers.reduce((best,p)=>totalPts[p]>totalPts[best]?p:best, allPlayers[0])
-        return player===lider && totalPts[lider]>0
+        const totais: Record<string,number> = {}
+        allPlayers.forEach(p=>{ totais[p]=allStats[p].totalPts })
+        const lider = allPlayers.reduce((best,p)=>totais[p]>totais[best]?p:best, allPlayers[0])
+        return player===lider && totais[lider]>0
       })()},
   ]
 
@@ -872,10 +993,10 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
     4: 'rgba(255,100,200,.6)',
   }
   const tierLabels: Record<number,string> = {
-    1: '🟢 Qualquer um pode ter',
-    2: '🔵 Nem todo mundo tem',
-    3: '🌟 Levanta que é só seu',
-    4: '👑 ÉPICO',
+    1: '🟢 Qualquer um tem, até você',
+    2: '🔵 Rapaz, esse aqui é bom',
+    3: '🌟 Levanta que essa é só sua!',
+    4: '👑 Parabéns, você é campeão do Palpitão Copa 2026',
   }
 
   function TrofeuCard({ t, C, tierColors, tierBorders }: { t: any, C: any, tierColors: any, tierBorders: any, key?: any }) {
@@ -904,7 +1025,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isEpic?20:15,
               color: isEpic ? '#FFB6FF' : isExclusive ? C.gold : '#fff',
               letterSpacing:isEpic?3:1}}>{t.label}</span>
-            {isEpic && <span style={{fontSize:9,background:'rgba(255,100,200,.3)',color:'#FFB6FF',border:'1px solid rgba(255,100,200,.5)',borderRadius:4,padding:'1px 6px',letterSpacing:2}}>ÉPICO</span>}
+            {isEpic && <span style={{fontSize:9,background:'rgba(255,100,200,.3)',color:'#FFB6FF',border:'1px solid rgba(255,100,200,.5)',borderRadius:4,padding:'1px 6px',letterSpacing:2}}>ÉPICO 👑</span>}
             {isExclusive && <span style={{fontSize:9,background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
             {t.tier===2 && <span style={{fontSize:9,background:'rgba(100,180,255,.2)',color:'#7ab0ff',border:'1px solid rgba(100,180,255,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
           </div>
@@ -976,7 +1097,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {tier4Conq.length > 0 && (
               <div style={{marginBottom:16}}>
                 <div style={{fontSize:10,color:'#FFB6FF',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
-                  <span>👑</span> ÉPICO
+                  <span>👑</span> Parabéns, você é campeão do Palpitão Copa 2026
                 </div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
                   {tier4Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
@@ -987,7 +1108,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {/* Tier 3 */}
             {tier3Conq.length > 0 && (
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,color:C.gold,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🌟 Levanta que é só seu</div>
+                <div style={{fontSize:10,color:C.gold,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🌟 Levanta que essa é só sua!</div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
                   {tier3Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
                 </div>
@@ -997,7 +1118,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {/* Tier 2 */}
             {tier2Conq.length > 0 && (
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,color:'#7ab0ff',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🔵 Nem todo mundo tem</div>
+                <div style={{fontSize:10,color:'#7ab0ff',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🔵 Rapaz, esse aqui é bom</div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
                   {tier2Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
                 </div>
@@ -1007,7 +1128,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {/* Tier 1 */}
             {tier1Conq.length > 0 && (
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,color:C.textMuted,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🟢 Qualquer um pode ter</div>
+                <div style={{fontSize:10,color:C.textMuted,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🟢 Qualquer um tem, até você</div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:6}}>
                   {tier1Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
                 </div>
@@ -1028,7 +1149,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
                       <div>
                         <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap' as const}}>
                           <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,color:C.textMuted,letterSpacing:1}}>{t.label}</span>
-                          {t.tier===4 && <span style={{fontSize:9,color:'rgba(255,150,255,.4)',border:'1px solid rgba(255,150,255,.2)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>ÉPICO</span>}
+                          {t.tier===4 && <span style={{fontSize:9,color:'rgba(255,150,255,.4)',border:'1px solid rgba(255,150,255,.2)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>ÉPICO 👑</span>}
                           {t.tier===3 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
                           {t.tier===2 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
                         </div>
@@ -3856,10 +3977,10 @@ function GuiaTab({ C, dm, state, guideTextStyle, guideTipStyle, guideHighlight, 
           <p style={{marginBottom:12}}>A Sala de Troféus fica no final das suas Estatísticas Pessoais (aba Ranking). Há mais de 30 conquistas divididas em 4 tiers:</p>
           <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
             {[
-              {tier:'🟢 Qualquer um pode ter', color:'rgba(255,255,255,.15)', border:'rgba(255,255,255,.2)',  ex:'Veterano, Galinha, Dormiu no Ponto...'},
-              {tier:'🔵 Nem todo mundo tem',   color:'rgba(100,180,255,.15)', border:'rgba(100,180,255,.35)', ex:'Hat-trick, O Analista, Sangue Frio...'},
-              {tier:'🌟 Levanta que é só seu', color:'rgba(212,175,55,.18)',  border:'rgba(212,175,55,.5)',   ex:'Perfeição, Relâmpago, O Predador...'},
-              {tier:'👑 ÉPICO',                color:'rgba(255,100,200,.18)', border:'rgba(255,100,200,.5)',   ex:'CAMPEÃO! — o maior pontuador da competição.'},
+              {tier:'🟢 Qualquer um tem, até você', color:'rgba(255,255,255,.15)', border:'rgba(255,255,255,.2)',  ex:'Veterano, Galinha, Dormiu no Ponto...'},
+              {tier:'🔵 Rapaz, esse aqui é bom',   color:'rgba(100,180,255,.15)', border:'rgba(100,180,255,.35)', ex:'Hat-trick, O Analista, Sangue Frio...'},
+              {tier:'🌟 Levanta que essa é só sua!', color:'rgba(212,175,55,.18)',  border:'rgba(212,175,55,.5)',   ex:'Perfeição, Relâmpago, O Predador...'},
+              {tier:'👑 Parabéns, você é campeão do Palpitão Copa 2026',                color:'rgba(255,100,200,.18)', border:'rgba(255,100,200,.5)',   ex:'CAMPEÃO! — o maior pontuador da competição.'},
             ].map(({tier,color,border,ex})=>(
               <div key={tier} style={{background:color,border:`1px solid ${border}`,borderRadius:8,padding:'10px 12px'}}>
                 <div style={{fontSize:12,fontWeight:600,color:C.gold,marginBottom:3}}>{tier}</div>

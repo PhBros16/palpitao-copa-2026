@@ -966,6 +966,10 @@ export default function Home() {
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
   const [logOpen, setLogOpen] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [showTabRodadas, setShowTabRodadas] = useState(false)
+  const [showEvolucao, setShowEvolucao] = useState(true)
+  const [showJogosHist, setShowJogosHist] = useState<Record<number,boolean>>({})
   const [showResultados, setShowResultados] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirm, setResetConfirm] = useState('')
@@ -2064,7 +2068,6 @@ export default function Home() {
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <div className="user-name">{currentUser}</div>
                 {!isAdmin && (()=>{
-                  const [avatarOpen, setAvatarOpen] = useState(false)
                   const EMOJIS = ['⚽','🏆','🔥','💎','🦁','🐯','🦊','🦅','💪','🎯','👑','🤡','😈','🧠','🎪','🌪️']
                   const cur = state.playerAvatars?.[currentUser!]
                   return (
@@ -2616,7 +2619,6 @@ export default function Home() {
 
             {/* Tabela rodada a rodada */}
             {state.roundHistory.length > 0 && (()=>{
-              const [showTabRodadas, setShowTabRodadas] = useState(false)
               const SCORE_COLORS = (pts:number, max:number) => {
                 if(pts===0) return {bg:'rgba(192,57,43,.15)',color:'#e74c3c'}
                 const r = pts/max
@@ -2680,7 +2682,6 @@ export default function Home() {
 
             {/* Gráfico de evolução — retrátil */}
             {state.roundHistory.length > 0 && (()=>{
-              const [showEvolucao, setShowEvolucao] = useState(true)
               return (
                 <div style={{marginBottom:20}}>
                   <button onClick={()=>setShowEvolucao(v=>!v)}
@@ -2715,8 +2716,9 @@ export default function Home() {
             <div className="section-sub">Acumulado de todas as rodadas finalizadas — cada entrada é permanente</div>
             {state.roundHistory.length===0&&<div style={{color:C.textMuted,fontSize:13,padding:'20px 0'}}>Nenhuma rodada finalizada ainda.</div>}
             {[...state.roundHistory].reverse().map((r:any,ri:number)=>{
-              const [showJogos, setShowJogos] = useState(false)
               const totalIdx = state.roundHistory.length - 1 - ri
+              const showJogos = showJogosHist[ri]||false
+              const setShowJogos = (v:boolean|((p:boolean)=>boolean)) => setShowJogosHist(prev=>({...prev,[ri]:typeof v==='function'?v(prev[ri]||false):v}))
               return (
               <div key={ri} className="a-card" style={{marginBottom:14}}>
                 {/* Cabeçalho da rodada */}

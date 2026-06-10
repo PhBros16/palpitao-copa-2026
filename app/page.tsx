@@ -1286,6 +1286,8 @@ export default function Home() {
   const [compareHistWindow, setCompareHistWindow] = useState<number>(0)
   const [projWindow, setProjWindow] = useState<number>(3) // janela de projeção em rodadas
   const [evolucaoWindow, setEvolucaoWindow] = useState<number>(0) // janela do gráfico de evolução (0 = desde o início)
+  const [musicPlaying, setMusicPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement|null>(null)
   const [chatMsg, setChatMsg] = useState('')
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatLoading, setChatLoading] = useState(false)
@@ -1483,7 +1485,30 @@ export default function Home() {
     } else { setModalError('Senha incorreta.') }
   }
 
-  function logout() { setCurrentUser(null); setIsAdmin(false); setAuthPassword(''); setActiveTab('home') }
+  // Música tema — autoplay ao entrar
+  useEffect(()=>{
+    if(!audioRef.current){
+      const audio = new Audio('/tunnel_vision.mp3')
+      audio.loop = true
+      audio.volume = 0.35
+      audioRef.current = audio
+    }
+    if(currentUser){
+      audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
+    } else {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setMusicPlaying(false)
+    }
+    return ()=>{ audioRef.current?.pause() }
+  },[currentUser])
+
+  function toggleMusic(){
+    const audio = audioRef.current
+    if(!audio) return
+    if(musicPlaying){ audio.pause(); setMusicPlaying(false) }
+    else { audio.play().then(()=>setMusicPlaying(true)).catch(()=>{}) }
+  }
 
   function getCurrentPhase(s: any) {
     return s.scoringPhases.find((p:any)=>p.name.toLowerCase().includes(s.round.phase))||s.scoringPhases[0]
@@ -2073,6 +2098,7 @@ export default function Home() {
         @keyframes fadeSlideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes scaleIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes rankEnter{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
         @keyframes countPulse{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
         @keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
@@ -2396,7 +2422,42 @@ export default function Home() {
           <div key={activeTab}>
           {/* ── HOME ── */}
           {activeTab==='home' && <div className="tab-content">
-            {/* Banner novidade */}
+
+            {/* ── Música Tema ── */}
+            <div onClick={toggleMusic} style={{
+              display:'flex',alignItems:'center',gap:12,
+              background:musicPlaying
+                ? (dm?'rgba(212,175,55,.12)':'rgba(212,175,55,.1)')
+                : (dm?'rgba(0,40,20,.5)':'rgba(0,60,30,.05)'),
+              border:`1px solid ${musicPlaying?'rgba(212,175,55,.4)':'rgba(212,175,55,.15)'}`,
+              borderRadius:'var(--radius)',padding:'10px 14px',marginBottom:14,cursor:'pointer',
+              transition:'all .25s',
+            }}>
+              <div style={{
+                width:36,height:36,borderRadius:'50%',flexShrink:0,
+                background:musicPlaying?'rgba(212,175,55,.2)':'rgba(212,175,55,.08)',
+                border:`1px solid ${musicPlaying?C.gold:'rgba(212,175,55,.2)'}`,
+                display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,
+                animation:musicPlaying?'spin 3s linear infinite':'none',
+              }}>
+                {musicPlaying?'🎵':'🎶'}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,fontWeight:700,color:C.gold,letterSpacing:1,lineHeight:1}}>
+                  {musicPlaying?'TOCANDO — Tunnel Vision':'MÚSICA TEMA'}
+                </div>
+                <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>
+                  {musicPlaying?'Toque para pausar':'Deixar tudo mais épico 🏆'}
+                </div>
+              </div>
+              <div style={{
+                fontFamily:"'Bebas Neue',sans-serif",fontSize:22,
+                color:musicPlaying?C.gold:'rgba(212,175,55,.35)',
+                transition:'color .2s',
+              }}>
+                {musicPlaying?'⏸':'▶'}
+              </div>
+            </div>
             {(()=>{
               const novs: any[] = state.novidades||[]
               if(!novs.length) return null

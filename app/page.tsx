@@ -1253,11 +1253,11 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       if(audioRef?.current) {
         audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
       }
-      const t = setTimeout(()=>setIntroPhase('fadeout'), 4800)
+      const t = setTimeout(()=>setIntroPhase('fadeout'), 5500)
       return ()=>clearTimeout(t)
     }
     if(introPhase==='fadeout') {
-      const t = setTimeout(()=>setShowIntro(false), 1000)
+      const t = setTimeout(()=>setShowIntro(false), 1700)
       return ()=>clearTimeout(t)
     }
   },[introPhase])
@@ -1270,7 +1270,7 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       display:'flex', alignItems:'center', justifyContent:'center',
       flexDirection:'column', zIndex:9999, overflow:'hidden',
       opacity: introPhase==='fadeout' ? 0 : 1,
-      transition: introPhase==='fadeout' ? 'opacity 1s ease' : 'none',
+      transition: introPhase==='fadeout' ? 'opacity 1.6s ease' : 'none',
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;700&display=swap');
@@ -1302,10 +1302,6 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
         @keyframes subtitleFade {
           0%   { opacity:0; letter-spacing: 10px }
           100% { opacity:1; letter-spacing: 4px }
-        }
-        @keyframes greenFlash {
-          0%   { opacity:1 }
-          100% { opacity:0 }
         }
         @keyframes stadiumFlash {
           0%,100% { background: #000d05 }
@@ -1353,18 +1349,6 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
         }}/>
       )}
 
-      {/* Flash verde — fim do countdown E início do reveal (cobre gap de transição) */}
-      {(introPhase==='countdown' && introCount === 0 && !loading) || introPhase==='reveal' ? (
-        <div style={{
-          position:'absolute', inset:0,
-          background:'#00cc44',
-          animation: introPhase==='reveal' ? 'greenFlash .5s ease .0s both' : 'none',
-          opacity: introPhase==='reveal' ? undefined : 1,
-          pointerEvents:'none',
-          zIndex:3,
-        }}/>
-      ) : null}
-
       {/* Countdown */}
       {introPhase==='countdown' && introCount > 0 && !loading && (
         <div key={introCount} style={{
@@ -1408,7 +1392,6 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
           {/* Flash de estádio */}
           <div style={{
             position:'absolute',inset:0,
-            background:'#000d05',
             animation:'stadiumFlash .6s ease both',
             pointerEvents:'none',
           }}/>
@@ -1472,9 +1455,7 @@ export default function Home() {
   const [introPhase, setIntroPhase] = useState<'countdown'|'reveal'|'fadeout'>('countdown')
   const [introCount, setIntroCount] = useState(3)
   const [musicPlaying, setMusicPlaying] = useState(false)
-  const audioRef = useRef<HTMLAudioElement|null>(
-    typeof window !== 'undefined' ? (() => { try { const a = new Audio('/tunnel_vision.mp3'); a.loop=true; a.volume=0.35; return a } catch(e){ return null } })() : null
-  )
+  const audioRef = useRef<HTMLAudioElement|null>(null)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<string|null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -1727,6 +1708,20 @@ export default function Home() {
     if(typeof window === 'undefined') return
     document.documentElement.style.background = '#001a0a'
     document.body.style.background = '#001a0a'
+  },[])
+
+  // Música tema — cria o objeto Audio na montagem para estar pronto quando a intro precisar
+  useEffect(()=>{
+    if(typeof window === 'undefined') return
+    if(!audioRef.current){
+      try {
+        const audio = new Audio('/tunnel_vision.mp3')
+        audio.loop = true
+        audio.volume = 0.35
+        audioRef.current = audio
+      } catch(e) {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 
   function logout() {

@@ -24,10 +24,10 @@ Tudo roda em tempo real, sem precisar criar conta — basta entrar com seu nome 
 - **Heatmap de performance** — visualização por rodada com detalhamento ao clicar
 - **38 conquistas** em 4 tiers de raridade, desbloqueadas automaticamente
 - **Comparativo frente a frente** — seus palpites vs qualquer outro participante
-- **Avatar personalizado** — cada participante escolhe seu emoji
-- **Painel admin** — cria rodadas, lança resultados, gerencia jogadores e configurações
-- **Notificações push** — avisa quando uma nova rodada abre
-- **Escudos oficiais** — logos de todas as seleções participantes da Copa 2026
+- **Avatar personalizado** — cada participante escolhe seu emoji que o represente
+- **Painel admin** — cria rodadas, lança resultados, gerencia jogadores e configurações do sistema
+- **Notificações push** — avisa quando uma nova rodada abre, um participante esquece de palpitar e afins
+- **Escudos oficiais** — logos de todas as seleções participantes da Copa do Mundo 2026
 - **Dark mode** nativo
 
 ---
@@ -36,9 +36,9 @@ Tudo roda em tempo real, sem precisar criar conta — basta entrar com seu nome 
 
 | Acerto | Pontos base |
 |--------|-------------|
-| Placar exato (cravada) | 3 pts |
+| Placar exato (cravada) | 5 pts |
 | Vencedor correto | 1 pt |
-| Saldo de gols correto | 1 pt |
+| Saldo de gols correto | 3 pt |
 
 Multiplicadores aumentam os pontos nas fases eliminatórias (configurável pelo admin).
 

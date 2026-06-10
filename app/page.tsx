@@ -1257,7 +1257,7 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       return ()=>clearTimeout(t)
     }
     if(introPhase==='fadeout') {
-      const t = setTimeout(()=>setShowIntro(false), 1700)
+      const t = setTimeout(()=>setShowIntro(false), 900)
       return ()=>clearTimeout(t)
     }
   },[introPhase])
@@ -1270,7 +1270,7 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       display:'flex', alignItems:'center', justifyContent:'center',
       flexDirection:'column', zIndex:9999, overflow:'hidden',
       opacity: introPhase==='fadeout' ? 0 : 1,
-      transition: introPhase==='fadeout' ? 'opacity 1.6s ease' : 'none',
+      transition: introPhase==='fadeout' ? 'opacity 0.8s ease' : 'none',
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;700&display=swap');
@@ -1392,6 +1392,7 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
           {/* Flash de estádio */}
           <div style={{
             position:'absolute',inset:0,
+            background:'#000d05',
             animation:'stadiumFlash .6s ease both',
             pointerEvents:'none',
           }}/>
@@ -1456,6 +1457,10 @@ export default function Home() {
   const [introCount, setIntroCount] = useState(3)
   const [musicPlaying, setMusicPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement|null>(null)
+  // Garante que o Audio existe antes de qualquer useEffect rodar
+  if(typeof window !== 'undefined' && !audioRef.current) {
+    try { const a=new Audio('/tunnel_vision.mp3'); a.loop=true; a.volume=0.35; audioRef.current=a } catch(e){}
+  }
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<string|null>(null)
   const [isAdmin, setIsAdmin] = useState(false)

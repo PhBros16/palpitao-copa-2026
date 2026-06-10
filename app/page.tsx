@@ -1233,9 +1233,224 @@ function AvatarPicker({ cur, open, onToggle, onSave, C, dm }: any) {
   )
 }
 
+// ── Intro Screen ────────────────────────────────────────────────────────────
+function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroPhase, setShowIntro, audioRef, setMusicPlaying }: any) {
+  useEffect(()=>{
+    if(loading) return // aguarda dados carregarem
+    // Inicia countdown
+    if(introPhase==='countdown' && introCount > 0) {
+      const t = setTimeout(()=>setIntroCount((c:number)=>c-1), 1200)
+      return ()=>clearTimeout(t)
+    }
+    if(introPhase==='countdown' && introCount === 0) {
+      setIntroPhase('reveal')
+      // Tenta tocar a música na reveal
+      if(audioRef?.current) {
+        audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
+      }
+      const t = setTimeout(()=>setIntroPhase('fadeout'), 3800)
+      return ()=>clearTimeout(t)
+    }
+    if(introPhase==='fadeout') {
+      const t = setTimeout(()=>setShowIntro(false), 1000)
+      return ()=>clearTimeout(t)
+    }
+  },[loading, introPhase, introCount])
+
+  const countColors: Record<number,string> = { 3:'#e74c3c', 2:'#e67e22', 1:'#D4AF37' }
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, background:'#000d05',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      flexDirection:'column', zIndex:9999, overflow:'hidden',
+      opacity: introPhase==='fadeout' ? 0 : 1,
+      transition: introPhase==='fadeout' ? 'opacity 1s ease' : 'none',
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;700&display=swap');
+        @keyframes countPop {
+          0%   { transform: scale(0.2); opacity:0 }
+          40%  { transform: scale(1.2); opacity:1 }
+          70%  { transform: scale(0.92) }
+          85%  { transform: scale(1.04) }
+          100% { transform: scale(1); opacity:.85 }
+        }
+        @keyframes countFadeOut {
+          0%   { opacity:.85 }
+          100% { opacity:0; transform:scale(1.3) }
+        }
+        @keyframes ballRoll {
+          0%   { transform: translateX(-120vw) rotate(0deg); opacity:0 }
+          10%  { opacity:1 }
+          100% { transform: translateX(120vw) rotate(900deg); opacity:.8 }
+        }
+        @keyframes titleReveal {
+          0%   { opacity:0; transform: translateY(40px) scale(.85); filter:blur(12px) }
+          60%  { filter:blur(2px) }
+          100% { opacity:1; transform: translateY(0) scale(1); filter:blur(0) }
+        }
+        @keyframes goldGlow {
+          0%,100% { text-shadow: 0 0 20px rgba(212,175,55,.4), 0 0 60px rgba(212,175,55,.2) }
+          50%      { text-shadow: 0 0 50px rgba(212,175,55,1), 0 0 120px rgba(212,175,55,.6), 0 0 200px rgba(212,175,55,.3) }
+        }
+        @keyframes subtitleFade {
+          0%   { opacity:0; letter-spacing: 10px }
+          100% { opacity:1; letter-spacing: 4px }
+        }
+        @keyframes stadiumFlash {
+          0%,100% { background: #000d05 }
+          8%       { background: #003015 }
+          16%      { background: #000d05 }
+          24%      { background: #001a0a }
+          32%      { background: #000d05 }
+        }
+        @keyframes linePulse {
+          0%   { width:0; opacity:0 }
+          60%  { width:220px; opacity:1 }
+          100% { width:300px; opacity:.7 }
+        }
+        @keyframes sparkle {
+          0%,100% { opacity:0; transform:scale(0) rotate(0deg) }
+          50%     { opacity:1; transform:scale(1) rotate(180deg) }
+        }
+        @keyframes vignette {
+          0%   { opacity:0 }
+          100% { opacity:1 }
+        }
+      `}</style>
+
+      {/* Partículas de fundo */}
+      {introPhase==='reveal' && Array.from({length:16}).map((_,i)=>(
+        <div key={i} style={{
+          position:'absolute',
+          left: `${8 + (i*6.5)%88}%`,
+          top:  `${5 + (i*11)%85}%`,
+          width: i%3===0?5:i%3===1?3:2,
+          height: i%3===0?5:i%3===1?3:2,
+          borderRadius:'50%',
+          background: i%2===0 ? '#D4AF37' : '#F0D060',
+          animation: `sparkle ${0.6 + (i%4)*0.4}s ease ${(i*0.18)}s both`,
+        }}/>
+      ))}
+
+      {/* Vinheta lateral */}
+      {introPhase==='reveal' && (
+        <div style={{
+          position:'absolute',inset:0,
+          background:'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.7) 100%)',
+          animation:'vignette .8s ease .2s both', opacity:0,
+          pointerEvents:'none',
+        }}/>
+      )}
+
+      {/* Countdown */}
+      {introPhase==='countdown' && introCount > 0 && !loading && (
+        <div key={introCount} style={{
+          fontFamily:"'Bebas Neue',sans-serif",
+          fontSize: 'clamp(140px,32vw,260px)',
+          color: countColors[introCount]||'#D4AF37',
+          lineHeight:1,
+          animation: 'countPop .9s cubic-bezier(.34,1.56,.64,1) both',
+          textShadow: `0 0 60px ${countColors[introCount]||'#D4AF37'}99, 0 0 120px ${countColors[introCount]||'#D4AF37'}44`,
+          userSelect:'none',
+        }}>
+          {introCount}
+        </div>
+      )}
+
+      {/* Loading aguardando dados */}
+      {loading && (
+        <div style={{
+          fontFamily:"'Barlow Condensed',sans-serif",
+          fontSize:14, color:'rgba(212,175,55,.5)',
+          letterSpacing:3, textTransform:'uppercase',
+        }}>
+          Carregando...
+        </div>
+      )}
+
+      {/* Bola cruzando + reveal do título */}
+      {introPhase==='reveal' && (
+        <>
+          {/* Bola */}
+          <div style={{
+            position:'absolute',
+            top:'42%',
+            fontSize:'clamp(56px,12vw,96px)',
+            animation:'ballRoll 1.8s cubic-bezier(.25,.46,.45,.94) both',
+            userSelect:'none', pointerEvents:'none',
+          }}>
+            ⚽
+          </div>
+
+          {/* Flash de estádio */}
+          <div style={{
+            position:'absolute',inset:0,
+            animation:'stadiumFlash .6s ease both',
+            pointerEvents:'none',
+          }}/>
+
+          {/* Título principal */}
+          <div style={{
+            display:'flex',flexDirection:'column',alignItems:'center',gap:6,
+            animation:'titleReveal .9s ease .5s both',
+          }}>
+            <div style={{
+              fontFamily:"'Barlow Condensed',sans-serif",
+              fontSize:'clamp(11px,2.5vw,14px)',
+              color:'rgba(212,175,55,.7)',
+              letterSpacing:6, textTransform:'uppercase',
+              animation:'subtitleFade 1.2s ease .9s both',
+              opacity:0,
+            }}>
+              Copa do Mundo 2026
+            </div>
+
+            <div style={{
+              fontFamily:"'Bebas Neue',sans-serif",
+              fontSize:'clamp(60px,16vw,120px)',
+              color:'#D4AF37',
+              lineHeight:.9,
+              animation:'goldGlow 2.4s ease .6s infinite',
+              letterSpacing:2,
+              userSelect:'none',
+            }}>
+              Palpitão
+            </div>
+
+            {/* Linha dourada */}
+            <div style={{
+              height:2, background:'linear-gradient(90deg,transparent,#D4AF37,transparent)',
+              animation:'linePulse 1.2s ease .9s both',
+              opacity:0, width:0,
+            }}/>
+
+            <div style={{
+              fontFamily:"'Barlow Condensed',sans-serif",
+              fontSize:'clamp(11px,2.5vw,13px)',
+              color:'rgba(240,208,96,.6)',
+              letterSpacing:4, textTransform:'uppercase',
+              animation:'subtitleFade 1.2s ease 1.4s both',
+              opacity:0,
+            }}>
+              Quem vai cravar?
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Home() {
   const [state, setState] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [showIntro, setShowIntro] = useState(true)
+  const [introPhase, setIntroPhase] = useState<'countdown'|'reveal'|'fadeout'>('countdown')
+  const [introCount, setIntroCount] = useState(3)
+  const [musicPlaying, setMusicPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement|null>(null)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<string|null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -1286,8 +1501,6 @@ export default function Home() {
   const [compareHistWindow, setCompareHistWindow] = useState<number>(0)
   const [projWindow, setProjWindow] = useState<number>(3) // janela de projeção em rodadas
   const [evolucaoWindow, setEvolucaoWindow] = useState<number>(0) // janela do gráfico de evolução (0 = desde o início)
-  const [musicPlaying, setMusicPlaying] = useState(false)
-  const audioRef = useRef<HTMLAudioElement|null>(null)
   const [chatMsg, setChatMsg] = useState('')
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatLoading, setChatLoading] = useState(false)
@@ -1911,7 +2124,18 @@ export default function Home() {
     a.click()
   }
 
-  if(loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#001a0a',color:'#D4AF37',fontFamily:'Barlow,sans-serif',fontSize:18}}>Carregando Palpitão...</div>
+  if(loading || showIntro) return (
+    <IntroScreen
+      loading={loading}
+      introPhase={introPhase}
+      introCount={introCount}
+      setIntroCount={setIntroCount}
+      setIntroPhase={setIntroPhase}
+      setShowIntro={setShowIntro}
+      audioRef={audioRef}
+      setMusicPlaying={setMusicPlaying}
+    />
+  )
   if(!state) return null
 
   const sorted = rankingData(state)

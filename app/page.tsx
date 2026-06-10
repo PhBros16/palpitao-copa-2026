@@ -1487,17 +1487,20 @@ export default function Home() {
 
   // Música tema — autoplay ao entrar
   useEffect(()=>{
+    if(typeof window === 'undefined') return
     if(!audioRef.current){
-      const audio = new Audio('/tunnel_vision.mp3')
-      audio.loop = true
-      audio.volume = 0.35
-      audioRef.current = audio
+      try {
+        const audio = new Audio('/tunnel_vision.mp3')
+        audio.loop = true
+        audio.volume = 0.35
+        audioRef.current = audio
+      } catch(e) { return }
     }
     if(currentUser){
-      audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
+      audioRef.current?.play().then(()=>setMusicPlaying(true)).catch(()=>{})
     } else {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
+      audioRef.current?.pause()
+      if(audioRef.current) audioRef.current.currentTime = 0
       setMusicPlaying(false)
     }
     return ()=>{ audioRef.current?.pause() }

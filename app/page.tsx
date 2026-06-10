@@ -1249,10 +1249,6 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
   // Efeito 2: reveal -> fadeout -> done
   useEffect(()=>{
     if(introPhase==='reveal') {
-      // Toca música ao entrar no reveal (usuário já interagiu com o countdown)
-      if(audioRef?.current) {
-        audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
-      }
       const t = setTimeout(()=>setIntroPhase('fadeout'), 5500)
       return ()=>clearTimeout(t)
     }
@@ -1261,6 +1257,13 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       return ()=>clearTimeout(t)
     }
   },[introPhase])
+
+  function handleStart() {
+    if(audioRef?.current) {
+      audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
+    }
+    setIntroPhase('countdown')
+  }
 
   const countColors: Record<number,string> = { 3:'#e74c3c', 2:'#e67e22', 1:'#D4AF37' }
 
@@ -1274,6 +1277,14 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;700&display=swap');
+        @keyframes splashPulse {
+          0%,100% { box-shadow: 0 0 0 0 rgba(212,175,55,0), 0 0 24px rgba(212,175,55,.3) }
+          50%     { box-shadow: 0 0 0 12px rgba(212,175,55,0), 0 0 48px rgba(212,175,55,.6) }
+        }
+        @keyframes splashFadeIn {
+          0%   { opacity:0; transform:scale(.94) }
+          100% { opacity:1; transform:scale(1) }
+        }
         @keyframes countPop {
           0%   { transform: scale(0.2); opacity:0 }
           40%  { transform: scale(1.2); opacity:1 }
@@ -1347,6 +1358,60 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
           animation:'vignette .8s ease .2s both', opacity:0,
           pointerEvents:'none',
         }}/>
+      )}
+
+      {/* Tela splash — "Iniciar" */}
+      {introPhase==='splash' && (
+        <div style={{
+          display:'flex', flexDirection:'column', alignItems:'center', gap:28,
+          animation:'splashFadeIn .6s ease both',
+        }}>
+          <div style={{
+            fontFamily:"'Bebas Neue',sans-serif",
+            fontSize:'clamp(44px,12vw,80px)',
+            color:'#D4AF37',
+            letterSpacing:4,
+            textShadow:'0 0 40px rgba(212,175,55,.4)',
+            lineHeight:1,
+            textAlign:'center',
+          }}>
+            Palpitão
+          </div>
+          <div style={{
+            fontFamily:"'Barlow Condensed',sans-serif",
+            fontSize:'clamp(10px,2.5vw,13px)',
+            color:'rgba(212,175,55,.5)',
+            letterSpacing:5, textTransform:'uppercase',
+            marginTop:-16,
+          }}>
+            Copa do Mundo 2026
+          </div>
+          <button
+            onClick={handleStart}
+            style={{
+              marginTop:8,
+              fontFamily:"'Barlow Condensed',sans-serif",
+              fontSize:'clamp(14px,3.5vw,18px)',
+              fontWeight:700,
+              letterSpacing:2,
+              textTransform:'uppercase',
+              color:'#001a0a',
+              background:'linear-gradient(135deg,#D4AF37,#F0D060)',
+              border:'none',
+              borderRadius:10,
+              padding:'16px 32px',
+              cursor:'pointer',
+              animation:'splashPulse 2s ease infinite',
+              transition:'transform .1s',
+            }}
+            onMouseDown={e=>(e.currentTarget.style.transform='scale(.97)')}
+            onMouseUp={e=>(e.currentTarget.style.transform='scale(1)')}
+            onTouchStart={e=>(e.currentTarget.style.transform='scale(.97)')}
+            onTouchEnd={e=>(e.currentTarget.style.transform='scale(1)')}
+          >
+            🏆 Iniciar a Máxima Experiência do Palpitão
+          </button>
+        </div>
       )}
 
       {/* Countdown */}
@@ -1453,11 +1518,10 @@ export default function Home() {
   const [state, setState] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [showIntro, setShowIntro] = useState(true)
-  const [introPhase, setIntroPhase] = useState<'countdown'|'reveal'|'fadeout'>('countdown')
+  const [introPhase, setIntroPhase] = useState<'splash'|'countdown'|'reveal'|'fadeout'>('splash')
   const [introCount, setIntroCount] = useState(3)
   const [musicPlaying, setMusicPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement|null>(null)
-  // Garante que o Audio existe antes de qualquer useEffect rodar
   if(typeof window !== 'undefined' && !audioRef.current) {
     try { const a=new Audio('/tunnel_vision.mp3'); a.loop=true; a.volume=0.35; audioRef.current=a } catch(e){}
   }

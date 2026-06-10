@@ -1269,9 +1269,10 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
 
   return (
     <div style={{
-      position:'fixed', inset:0, background:'#000d05',
+      position:'fixed', inset:0, background:'#001a0a',
       display:'flex', alignItems:'center', justifyContent:'center',
       flexDirection:'column', zIndex:9999, overflow:'hidden',
+      minHeight:'100dvh',
       opacity: introPhase==='fadeout' ? 0 : 1,
       transition: introPhase==='fadeout' ? 'opacity 0.8s ease' : 'none',
     }}>
@@ -1751,7 +1752,10 @@ export default function Home() {
   useEffect(()=>{
     if(typeof window === 'undefined') return
     document.documentElement.style.background = '#001a0a'
+    document.documentElement.style.height = '100%'
     document.body.style.background = '#001a0a'
+    document.body.style.margin = '0'
+    document.body.style.height = '100%'
   },[])
 
   // Música tema — cria o objeto Audio na montagem para estar pronto quando a intro precisar

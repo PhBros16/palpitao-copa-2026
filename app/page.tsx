@@ -1235,29 +1235,31 @@ function AvatarPicker({ cur, open, onToggle, onSave, C, dm }: any) {
 
 // ── Intro Screen ────────────────────────────────────────────────────────────
 function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroPhase, setShowIntro, audioRef, setMusicPlaying }: any) {
+  // Efeito 1: countdown e transição para reveal (aguarda loading)
   useEffect(()=>{
-    // Countdown: avança independente do loading
     if(introPhase==='countdown' && introCount > 0) {
       const t = setTimeout(()=>setIntroCount((c:number)=>c-1), 1200)
       return ()=>clearTimeout(t)
     }
-    // Countdown chegou a 0: aguarda loading terminar para ir ao reveal
-    if(introPhase==='countdown' && introCount === 0) {
-      if(loading) return // segura aqui até o fetch terminar
-      setIntroPhase('reveal')
+    if(introPhase==='countdown' && introCount === 0 && !loading) {
       if(audioRef?.current) {
         audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
       }
+      setIntroPhase('reveal')
+    }
+  },[loading, introPhase, introCount])
+
+  // Efeito 2: reveal -> fadeout -> done (isolado, sem depender de loading)
+  useEffect(()=>{
+    if(introPhase==='reveal') {
       const t = setTimeout(()=>setIntroPhase('fadeout'), 3800)
       return ()=>clearTimeout(t)
     }
-    // Se chegou em 'reveal' por re-render, não agenda nada (já foi agendado acima)
-    if(introPhase==='reveal') return
     if(introPhase==='fadeout') {
       const t = setTimeout(()=>setShowIntro(false), 1000)
       return ()=>clearTimeout(t)
     }
-  },[loading, introPhase, introCount])
+  },[introPhase])
 
   const countColors: Record<number,string> = { 3:'#e74c3c', 2:'#e67e22', 1:'#D4AF37' }
 

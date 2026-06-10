@@ -1235,28 +1235,38 @@ function AvatarPicker({ cur, open, onToggle, onSave, C, dm }: any) {
 
 // ── Intro Screen ────────────────────────────────────────────────────────────
 function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroPhase, setShowIntro, audioRef, setMusicPlaying }: any) {
-  // Efeito 1: countdown e transição para reveal (aguarda loading)
+  // Efeito 1: countdown
   useEffect(()=>{
     if(introPhase==='countdown' && introCount > 0) {
       const t = setTimeout(()=>setIntroCount((c:number)=>c-1), 1200)
       return ()=>clearTimeout(t)
     }
     if(introPhase==='countdown' && introCount === 0 && !loading) {
-      if(audioRef?.current) {
-        audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
-      }
       setIntroPhase('reveal')
     }
   },[loading, introPhase, introCount])
 
-  // Efeito 2: reveal -> fadeout -> done (isolado, sem depender de loading)
+  // Efeito 2: reveal -> fadeout -> done
   useEffect(()=>{
     if(introPhase==='reveal') {
-      const t = setTimeout(()=>setIntroPhase('fadeout'), 3800)
+      // Toca música ao entrar no reveal (usuário já interagiu com o countdown)
+      let audio = audioRef?.current
+      if(!audio) {
+        try {
+          audio = new Audio('/tunnel_vision.mp3')
+          audio.loop = true
+          audio.volume = 0.35
+          if(audioRef) audioRef.current = audio
+        } catch(e) {}
+      }
+      if(audio) {
+        audio.play().then(()=>setMusicPlaying(true)).catch(()=>{})
+      }
+      const t = setTimeout(()=>setIntroPhase('fadeout'), 5200)
       return ()=>clearTimeout(t)
     }
     if(introPhase==='fadeout') {
-      const t = setTimeout(()=>setShowIntro(false), 1000)
+      const t = setTimeout(()=>{ sessionStorage.setItem('palpitao_intro_done','1'); setShowIntro(false) }, 1000)
       return ()=>clearTimeout(t)
     }
   },[introPhase])
@@ -1302,6 +1312,12 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
           0%   { opacity:0; letter-spacing: 10px }
           100% { opacity:1; letter-spacing: 4px }
         }
+        @keyframes greenFlash {
+          0%   { opacity:0 }
+          15%  { opacity:.6 }
+          50%  { opacity:.35 }
+          100% { opacity:0 }
+        }
         @keyframes stadiumFlash {
           0%,100% { background: #000d05 }
           8%       { background: #003015 }
@@ -1345,6 +1361,17 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
           background:'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,.7) 100%)',
           animation:'vignette .8s ease .2s both', opacity:0,
           pointerEvents:'none',
+        }}/>
+      )}
+
+      {/* Flash verde no fim do countdown */}
+      {introPhase==='countdown' && introCount === 0 && !loading && (
+        <div style={{
+          position:'absolute', inset:0,
+          background:'#00dd55',
+          animation:'greenFlash .6s ease both',
+          pointerEvents:'none',
+          zIndex:2,
         }}/>
       )}
 
@@ -1450,7 +1477,10 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
 export default function Home() {
   const [state, setState] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [showIntro, setShowIntro] = useState(true)
+  const [showIntro, setShowIntro] = useState(()=>{
+    if(typeof window === 'undefined') return true
+    return sessionStorage.getItem('palpitao_intro_done') !== '1'
+  })
   const [introPhase, setIntroPhase] = useState<'countdown'|'reveal'|'fadeout'>('countdown')
   const [introCount, setIntroCount] = useState(3)
   const [musicPlaying, setMusicPlaying] = useState(false)
@@ -1702,35 +1732,24 @@ export default function Home() {
     } else { setModalError('Senha incorreta.') }
   }
 
-  // Música tema — inicia junto com a intro, uma vez por sessão
+  // Pinta o body de escuro imediatamente para evitar flash branco na transição intro → app
   useEffect(()=>{
     if(typeof window === 'undefined') return
-    const alreadyStarted = sessionStorage.getItem('palpitao_music_started')
-    if(alreadyStarted) return
+    document.documentElement.style.background = '#001a0a'
+    document.body.style.background = '#001a0a'
+  },[])
+
+  // Música tema — cria o objeto Audio na montagem para estar pronto quando a intro precisar
+  useEffect(()=>{
+    if(typeof window === 'undefined') return
     if(!audioRef.current){
       try {
         const audio = new Audio('/tunnel_vision.mp3')
         audio.loop = true
         audio.volume = 0.35
         audioRef.current = audio
-      } catch(e) { return }
+      } catch(e) {}
     }
-    audioRef.current.play().then(()=>{
-      setMusicPlaying(true)
-      sessionStorage.setItem('palpitao_music_started','1')
-    }).catch(()=>{
-      // Browser bloqueou autoplay — toca no primeiro toque do usuário
-      const resume = () => {
-        audioRef.current?.play().then(()=>{
-          setMusicPlaying(true)
-          sessionStorage.setItem('palpitao_music_started','1')
-        }).catch(()=>{})
-        document.removeEventListener('click', resume)
-        document.removeEventListener('touchstart', resume)
-      }
-      document.addEventListener('click', resume)
-      document.addEventListener('touchstart', resume)
-    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
 

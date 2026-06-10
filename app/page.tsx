@@ -1356,67 +1356,33 @@ function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroP
       {/* Tela splash — "Iniciar" */}
       {introPhase==='splash' && (
         <div style={{
-          display:'flex', flexDirection:'column', alignItems:'center', gap:20,
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          gap:24, padding:'0 32px', width:'100%', boxSizing:'border-box' as const,
           animation:'splashFadeIn .6s ease both',
         }}>
-          {/* Taça SVG dourada */}
-          <svg width="120" height="150" viewBox="0 0 120 150" fill="none" xmlns="http://www.w3.org/2000/svg"
-            style={{filter:'drop-shadow(0 0 24px rgba(212,175,55,.5)) drop-shadow(0 0 8px rgba(212,175,55,.3))'}}>
-            <defs>
-              <linearGradient id="goldG" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#F0D060"/>
-                <stop offset="40%" stopColor="#D4AF37"/>
-                <stop offset="100%" stopColor="#A07820"/>
-              </linearGradient>
-              <linearGradient id="goldG2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#F5E070"/>
-                <stop offset="100%" stopColor="#B08A20"/>
-              </linearGradient>
-            </defs>
-            {/* Copa principal */}
-            <path d="M38 12 Q34 40 30 54 Q24 72 36 84 Q46 94 60 96 Q74 94 84 84 Q96 72 90 54 Q86 40 82 12 Z"
-              fill="url(#goldG)" opacity=".95"/>
-            {/* Reflexo interno */}
-            <path d="M46 18 Q43 38 41 50 Q38 62 44 71 Q50 78 60 80"
-              stroke="#FFF8D0" strokeWidth="1.5" strokeLinecap="round" opacity=".35" fill="none"/>
-            {/* Alças */}
-            <path d="M38 22 Q18 24 16 40 Q14 54 28 58 Q34 60 38 56"
-              stroke="url(#goldG2)" strokeWidth="5" strokeLinecap="round" fill="none"/>
-            <path d="M82 22 Q102 24 104 40 Q106 54 92 58 Q86 60 82 56"
-              stroke="url(#goldG2)" strokeWidth="5" strokeLinecap="round" fill="none"/>
-            {/* Pescoço / base superior */}
-            <rect x="50" y="96" width="20" height="14" rx="2" fill="url(#goldG)" opacity=".9"/>
-            {/* Plataforma */}
-            <rect x="36" y="110" width="48" height="8" rx="3" fill="url(#goldG)"/>
-            {/* Base */}
-            <rect x="28" y="118" width="64" height="10" rx="4" fill="url(#goldG2)"/>
-            {/* Brilho no topo da taça */}
-            <ellipse cx="60" cy="13" rx="18" ry="3" fill="#FFF8D0" opacity=".2"/>
-          </svg>
-
           <div style={{
             fontFamily:"'Barlow Condensed',sans-serif",
-            fontSize:'clamp(10px,2.5vw,13px)',
+            fontSize:'clamp(11px,3vw,14px)',
             color:'rgba(212,175,55,.6)',
-            letterSpacing:6, textTransform:'uppercase',
-            marginTop:-4,
+            letterSpacing:6, textTransform:'uppercase' as const,
+            textAlign:'center' as const,
           }}>
             Copa do Mundo 2026
           </div>
           <button
             onClick={handleStart}
             style={{
-              marginTop:12,
+              width:'100%', maxWidth:340,
               fontFamily:"'Barlow Condensed',sans-serif",
-              fontSize:'clamp(14px,3.5vw,18px)',
+              fontSize:'clamp(15px,4vw,18px)',
               fontWeight:700,
               letterSpacing:2,
-              textTransform:'uppercase',
+              textTransform:'uppercase' as const,
               color:'#001a0a',
               background:'linear-gradient(135deg,#D4AF37,#F0D060)',
               border:'none',
               borderRadius:10,
-              padding:'16px 32px',
+              padding:'18px 24px',
               cursor:'pointer',
               animation:'splashPulse 2s ease infinite',
               transition:'transform .1s',

@@ -1236,21 +1236,23 @@ function AvatarPicker({ cur, open, onToggle, onSave, C, dm }: any) {
 // ── Intro Screen ────────────────────────────────────────────────────────────
 function IntroScreen({ loading, introPhase, introCount, setIntroCount, setIntroPhase, setShowIntro, audioRef, setMusicPlaying }: any) {
   useEffect(()=>{
-    if(loading) return // aguarda dados carregarem
-    // Inicia countdown
+    // Countdown: avança independente do loading
     if(introPhase==='countdown' && introCount > 0) {
       const t = setTimeout(()=>setIntroCount((c:number)=>c-1), 1200)
       return ()=>clearTimeout(t)
     }
+    // Countdown chegou a 0: aguarda loading terminar para ir ao reveal
     if(introPhase==='countdown' && introCount === 0) {
+      if(loading) return // segura aqui até o fetch terminar
       setIntroPhase('reveal')
-      // Tenta tocar a música na reveal
       if(audioRef?.current) {
         audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>{})
       }
       const t = setTimeout(()=>setIntroPhase('fadeout'), 3800)
       return ()=>clearTimeout(t)
     }
+    // Se chegou em 'reveal' por re-render, não agenda nada (já foi agendado acima)
+    if(introPhase==='reveal') return
     if(introPhase==='fadeout') {
       const t = setTimeout(()=>setShowIntro(false), 1000)
       return ()=>clearTimeout(t)
@@ -1698,9 +1700,11 @@ export default function Home() {
     } else { setModalError('Senha incorreta.') }
   }
 
-  // Música tema — autoplay ao entrar
+  // Música tema — inicia junto com a intro, uma vez por sessão
   useEffect(()=>{
     if(typeof window === 'undefined') return
+    const alreadyStarted = sessionStorage.getItem('palpitao_music_started')
+    if(alreadyStarted) return
     if(!audioRef.current){
       try {
         const audio = new Audio('/tunnel_vision.mp3')
@@ -1709,15 +1713,24 @@ export default function Home() {
         audioRef.current = audio
       } catch(e) { return }
     }
-    if(currentUser){
-      audioRef.current?.play().then(()=>setMusicPlaying(true)).catch(()=>{})
-    } else {
-      audioRef.current?.pause()
-      if(audioRef.current) audioRef.current.currentTime = 0
-      setMusicPlaying(false)
-    }
-    return ()=>{ audioRef.current?.pause() }
-  },[currentUser])
+    audioRef.current.play().then(()=>{
+      setMusicPlaying(true)
+      sessionStorage.setItem('palpitao_music_started','1')
+    }).catch(()=>{
+      // Browser bloqueou autoplay — toca no primeiro toque do usuário
+      const resume = () => {
+        audioRef.current?.play().then(()=>{
+          setMusicPlaying(true)
+          sessionStorage.setItem('palpitao_music_started','1')
+        }).catch(()=>{})
+        document.removeEventListener('click', resume)
+        document.removeEventListener('touchstart', resume)
+      }
+      document.addEventListener('click', resume)
+      document.addEventListener('touchstart', resume)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
 
   function logout() {
     setCurrentUser(null)

@@ -1997,21 +1997,26 @@ export default function Home() {
   async function requestPushPermission() {
     if(typeof window === 'undefined') return
     const win = window as any
-    if(win.OneSignalDeferred) {
+    try {
+      // Tenta chamar direto no OneSignal já inicializado
+      if(win.OneSignal?.Notifications) {
+        await win.OneSignal.Notifications.requestPermission()
+        const granted = win.OneSignal.Notifications.permission === true
+        setPushStatus(granted ? 'granted' : 'denied')
+        if(granted) showNotif('Notificações ativadas! 🔔', 'success')
+        return
+      }
+      // Fallback: enfileira no deferred se ainda não inicializou
+      win.OneSignalDeferred = win.OneSignalDeferred || []
       win.OneSignalDeferred.push(async (OneSignal: any) => {
         try {
           await OneSignal.Notifications.requestPermission()
-          if(OneSignal.Notifications.permission === true) {
-            setPushStatus('granted')
-            showNotif('Notificações ativadas! 🔔', 'success')
-          } else {
-            setPushStatus('denied')
-          }
-        } catch (error) {
-          console.error("Erro no OneSignal:", error)
-        }
+          const granted = OneSignal.Notifications.permission === true
+          setPushStatus(granted ? 'granted' : 'denied')
+          if(granted) showNotif('Notificações ativadas! 🔔', 'success')
+        } catch(e) { console.error('OneSignal error:', e) }
       })
-    }
+    } catch(e) { console.error('requestPushPermission error:', e) }
   }
 
   async function sendPushNotification() {

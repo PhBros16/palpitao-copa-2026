@@ -6,12 +6,14 @@ const MASTER_PASS = 'Mestre#26Pal'
 
 // ── Playlist ────────────────────────────────────────────────────────────────
 const PLAYLIST = [
-  { id: 'tunnel_vision',    title: 'Tunnel Vision',       artist: 'Justin Timberlake', file: '/tunnel_vision.mp3' },
-  { id: 'waka_waka',        title: 'Waka Waka',           artist: 'Shakira',           file: '/waka_waka.mp3' },
-  { id: 'live_it_up',       title: 'Live It Up',          artist: 'Nicky Jam',         file: '/live_it_up.mp3' },
-  { id: 'wavin_flag',       title: "Wavin' Flag",         artist: "K'Naan",            file: '/wavin_flag.mp3' },
-  { id: 'la_la_la',         title: 'La La La',            artist: 'Shakira',           file: '/la_la_la.mp3' },
-  { id: 'colors',           title: 'Colors',              artist: 'Jason Derulo',      file: '/colors.mp3' },
+  { id: 'tunnel_vision',       title: 'Tunnel Vision',        artist: 'Justin Timberlake', file: '/tunnel_vision.mp3' },
+  { id: 'waka_waka',           title: 'Waka Waka',            artist: 'Shakira',           file: '/waka_waka.mp3' },
+  { id: 'live_it_up',          title: 'Live It Up',           artist: 'Nicky Jam',         file: '/live_it_up.mp3' },
+  { id: 'wavin_flag',          title: "Wavin' Flag",          artist: "K'Naan",            file: '/wavin_flag.mp3' },
+  { id: 'la_la_la',            title: 'La La La',             artist: 'Shakira',           file: '/la_la_la.mp3' },
+  { id: 'colors',              title: 'Colors',               artist: 'Jason Derulo',      file: '/colors.mp3' },
+  { id: 'world_cup_champions', title: 'World Cup (Champions)', artist: 'IShowSpeed',       file: '/world_cup_champions.mp3' },
+  { id: 'we_are_one',          title: 'We Are One (Olé Olá)', artist: 'Pitbull',           file: '/we_are_one.mp3' },
 ]
 
 // Mapeamento de nome da seleção → logo local
@@ -1507,11 +1509,10 @@ export default function Home() {
   const [introPhase, setIntroPhase] = useState<'splash'|'countdown'|'reveal'|'fadeout'>('splash')
   const [introCount, setIntroCount] = useState(3)
   const [musicPlaying, setMusicPlaying] = useState(false)
-  const [currentTrackId, setCurrentTrackId] = useState(()=>{
-    // Será atualizado quando o state carregar via useEffect abaixo
-    return PLAYLIST[0].id
-  })
+  const [currentTrackId, setCurrentTrackId] = useState(()=>{ return PLAYLIST[0].id })
   const [showPlaylist, setShowPlaylist] = useState(false)
+  const [playlistMode, setPlaylistMode] = useState(false)
+  const playlistModeRef = useRef(false) // ref espelha o estado para uso em closures (evita stale closure)
   const audioRef = useRef<HTMLAudioElement|null>(null)
   if(typeof window !== 'undefined' && !audioRef.current) {
     try { const a=new Audio(PLAYLIST[0].file); a.loop=true; a.volume=0.35; audioRef.current=a } catch(e){}
@@ -1796,13 +1797,30 @@ export default function Home() {
 
   function getTrack(id: string) { return PLAYLIST.find(t=>t.id===id)||PLAYLIST[0] }
 
-  function loadTrack(id: string, autoplay=false) {
+  function loadTrack(id: string, autoplay=false, userChose=false) {
     const track = getTrack(id)
     setCurrentTrackId(id)
+    if(userChose) { setPlaylistMode(true); playlistModeRef.current = true }
     if(audioRef.current) {
       audioRef.current.pause()
       audioRef.current.src = track.file
+      audioRef.current.loop = !playlistModeRef.current // loop só quando NÃO está em modo playlist
       audioRef.current.load()
+      audioRef.current.onended = () => {
+        if(playlistModeRef.current) {
+          setCurrentTrackId(cur => {
+            const idx = PLAYLIST.findIndex(t=>t.id===cur)
+            const next = PLAYLIST[(idx+1)%PLAYLIST.length]
+            if(audioRef.current) {
+              audioRef.current.src = next.file
+              audioRef.current.loop = false
+              audioRef.current.load()
+              audioRef.current.play().catch(()=>{})
+            }
+            return next.id
+          })
+        }
+      }
       if(autoplay || musicPlaying) {
         audioRef.current.play().then(()=>setMusicPlaying(true)).catch(()=>setMusicPlaying(false))
       } else {
@@ -1821,13 +1839,13 @@ export default function Home() {
   function nextTrack() {
     const idx = PLAYLIST.findIndex(t=>t.id===currentTrackId)
     const next = PLAYLIST[(idx+1)%PLAYLIST.length]
-    loadTrack(next.id, true)
+    loadTrack(next.id, true, true)
   }
 
   function prevTrack() {
     const idx = PLAYLIST.findIndex(t=>t.id===currentTrackId)
     const prev = PLAYLIST[(idx-1+PLAYLIST.length)%PLAYLIST.length]
-    loadTrack(prev.id, true)
+    loadTrack(prev.id, true, true)
   }
 
   function getCurrentPhase(s: any) {
@@ -2789,7 +2807,7 @@ export default function Home() {
                         {musicPlaying ? track.title.toUpperCase() : 'MÚSICA TEMA'}
                       </div>
                       <div style={{fontSize:11,color:C.textMuted,marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                        {musicPlaying ? track.artist : 'Toque para tocar · ' + PLAYLIST.length + ' músicas'}
+                        {musicPlaying ? `${track.artist} · ${playlistMode ? '▶▶ playlist' : '🔁 loop'}` : 'Toque para tocar · ' + PLAYLIST.length + ' músicas'}
                       </div>
                     </div>
 
@@ -2818,7 +2836,7 @@ export default function Home() {
                       {PLAYLIST.map((t,i)=>{
                         const isActive = t.id===currentTrackId
                         return (
-                          <div key={t.id} onClick={()=>loadTrack(t.id, true)}
+                          <div key={t.id} onClick={()=>loadTrack(t.id, true, true)}
                             style={{
                               display:'flex',alignItems:'center',gap:10,padding:'9px 14px',
                               borderBottom: i<PLAYLIST.length-1?`1px solid ${C.borderFaint}`:'none',

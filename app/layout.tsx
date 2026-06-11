@@ -33,9 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           OneSignalDeferred.push(async function(OneSignal) {
             await OneSignal.init({
               appId: "d925369e-0929-43a2-b17c-ffdc11bfae8f",
-              safari_web_id: "web.onesignal.auto.d925369e-0929-43a2-b17c-ffdc11bfae8f",
               notifyButton: { enable: false },
-              allowLocalhostAsSecureOrigin: true,
             });
           });
         `}}/>

@@ -12,7 +12,7 @@ const PLAYLIST = [
   { id: 'wavin_flag',          title: "Wavin' Flag",          artist: "K'Naan",            file: '/wavin_flag.mp3' },
   { id: 'la_la_la',            title: 'La La La',             artist: 'Shakira',           file: '/la_la_la.mp3' },
   { id: 'colors',              title: 'Colors',               artist: 'Jason Derulo',      file: '/colors.mp3' },
-  { id: 'world_cup_champions', title: 'World Cup (Champions)', artist: 'IShowSpeed',       file: '/world_cup_champions.mp3' },
+  { id: 'the_cup_of_life',     title: 'The Cup of Life',      artist: 'Ricky Martin',      file: '/the_cup_of_life.mp3' },
   { id: 'we_are_one',          title: 'We Are One (Olé Olá)', artist: 'Pitbull',           file: '/we_are_one.mp3' },
 ]
 

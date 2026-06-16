@@ -191,18 +191,39 @@ function parseMatchDateTime(m: any): Date | null {
   return dt
 }
 
-function isMatchLocked(m: any, matchIndex: number = 1): boolean {
+// Retorna true se o jogo é o primeiro do seu dia na rodada (buffer = 0)
+// Para os demais jogos do mesmo dia, buffer = 30 minutos
+function isFirstMatchOfDay(m: any, allMatches: any[]): boolean {
+  if(!m.date || !m.time) return true // sem data: assume primeiro
+  const [mH, mMin] = m.time.split(':').map(Number)
+  const mMins = mH * 60 + mMin
+  // Verifica se existe outro jogo no mesmo dia com horário anterior
+  return !allMatches.some(other => {
+    if(other === m) return false
+    if(other.date !== m.date) return false
+    if(!other.time) return false
+    const [oH, oMin] = other.time.split(':').map(Number)
+    const oMins = oH * 60 + oMin
+    return oMins < mMins
+  })
+}
+
+function getLockBuffer(m: any, allMatches: any[]): number {
+  return isFirstMatchOfDay(m, allMatches) ? 0 : 30 * 60 * 1000
+}
+
+function isMatchLocked(m: any, matchIndex: number = 1, allMatches?: any[]): boolean {
   if(m.locked) return true
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return false
-  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
+  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
   return (matchTime.getTime() - Date.now()) <= buffer
 }
 
-function getCountdown(m: any, matchIndex: number): string | null {
+function getCountdown(m: any, matchIndex: number, allMatches?: any[]): string | null {
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return null
-  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
+  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
   const diff = matchTime.getTime() - buffer - Date.now()
   if(diff <= 0) return null
   const hours = Math.floor(diff / 3600000)
@@ -213,10 +234,10 @@ function getCountdown(m: any, matchIndex: number): string | null {
   return `${secs}s`
 }
 
-function getCountdownMs(m: any, matchIndex: number): number {
+function getCountdownMs(m: any, matchIndex: number, allMatches?: any[]): number {
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return Infinity
-  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
+  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
   return matchTime.getTime() - buffer - Date.now()
 }
 
@@ -1887,7 +1908,7 @@ export default function Home() {
     const newState = JSON.parse(JSON.stringify(state))
     if(!newState.palpites[currentUser]) newState.palpites[currentUser]={}
     state.round.matches.forEach((m:any, idx:number)=>{
-      if(isMatchLocked(m,idx)) return
+      if(isMatchLocked(m,idx,state.round.matches)) return
       const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
       newState.palpites[currentUser][m.id]=pal
     })
@@ -2881,7 +2902,7 @@ export default function Home() {
             {/* Banner palpite pendente */}
             {!isAdmin && state.palpitesOpen && state.round.matches.length>0 && !state.roundFinalized && (()=>{
               const myPal=state.palpites[currentUser!]||{}
-              const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx)&&(!myPal[m.id]||myPal[m.id].h===''))
+              const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx,state.round.matches)&&(!myPal[m.id]||myPal[m.id].h===''))
               return pendentes.length>0?(
                 <div className="pending-banner" onClick={()=>setActiveTab('palpites')}>
                   <span style={{fontSize:20}}>⚠️</span>
@@ -2900,14 +2921,14 @@ export default function Home() {
               const myTotal = !isAdmin ? (state.totalPoints[currentUser!]||0) : 0
               const myRoundPts = !isAdmin ? (Object.values(state.correctedScores[currentUser!]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number) : 0
               const ptsParaSubir = myPos > 0 ? (sorted[myPos-1]?.total||0) - myTotal : 0
-              const jogosRestantes = state.round.matches.filter((_:any, idx:number) => !isMatchLocked(state.round.matches[idx], idx)).length
+              const jogosRestantes = state.round.matches.filter((m:any, idx:number) => !isMatchLocked(m, idx, state.round.matches)).length
               const proximoJogo = state.round.matches.reduce((closest:any, m:any, idx:number)=>{
-                const diff = getCountdownMs(m, idx)
-                if(diff > 0 && (closest === null || diff < getCountdownMs(closest.m, closest.idx)))
+                const diff = getCountdownMs(m, idx, state.round.matches)
+                if(diff > 0 && (closest === null || diff < getCountdownMs(closest.m, closest.idx, state.round.matches)))
                   return {m, idx}
                 return closest
               }, null)
-              const proximoCountdown = proximoJogo ? getCountdown(proximoJogo.m, proximoJogo.idx) : null
+              const proximoCountdown = proximoJogo ? getCountdown(proximoJogo.m, proximoJogo.idx, state.round.matches) : null
 
               return (
                 <div style={{background:dm?'linear-gradient(135deg,rgba(0,50,25,.7),rgba(0,30,60,.5))':'rgba(255,255,255,.9)',border:`1px solid ${C.border}`,borderRadius:12,padding:'18px 16px',marginBottom:20,boxShadow:C.shadow}}>
@@ -3133,7 +3154,7 @@ export default function Home() {
             {(()=>{
               if(!currentUser||isAdmin) return null
               const travadosSemPalpite = state.round.matches.filter((m:any,idx:number)=>{
-                const locked = isMatchLocked(m,idx)
+                const locked = isMatchLocked(m,idx,state.round.matches)
                 const pal = state.palpites[currentUser!]?.[m.id]
                 return locked && (!pal || pal.h === '')
               })
@@ -3166,8 +3187,8 @@ export default function Home() {
 
             {[...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any,idx:number)=>{
               const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
-              const locked=!state.palpitesOpen||isMatchLocked(m,idx)
-              const diffMs = getCountdownMs(m, idx)
+              const locked=!state.palpitesOpen||isMatchLocked(m,idx,state.round.matches)
+              const diffMs = getCountdownMs(m, idx, state.round.matches)
               const phase = getCurrentPhase(state)
               const scoreMult = state.multipliers||defaultMultipliers()
               const simPts = calcSimulatedPoints(pal, phase, mult, m, scoreMult)
@@ -3239,7 +3260,7 @@ export default function Home() {
                         <span>⏱ {m.date?`${m.date} · `:''}{m.time||'—'}</span>
                         {/* Timer visual urgente quando menos de 1h */}
                         {diffMs > 0 && diffMs < 3600000 && <CountdownTimer diffMs={diffMs} C={C}/>}
-                        {diffMs >= 3600000 && <span style={{color:C.goldLight,fontSize:12}}>· fecha em {getCountdown(m,idx)}</span>}
+                        {diffMs >= 3600000 && <span style={{color:C.goldLight,fontSize:12}}>· fecha em {getCountdown(m,idx,state.round.matches)}</span>}
                       </span>
                   }
                 </div>
@@ -4004,7 +4025,7 @@ export default function Home() {
                         const res=state.results[m.id]
                         const pts=state.correctedScores[p]?.[m.id]
                         const key=`${p}-${m.id}`
-                        const locked = isMatchLocked(m, state.round.matches.indexOf(m))
+                        const locked = isMatchLocked(m, state.round.matches.indexOf(m), state.round.matches)
                         return (
                           <div key={m.id} style={{padding:'10px 0',borderBottom:`1px solid ${C.borderFaint}`}}>
                             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:6,marginBottom:6}}>

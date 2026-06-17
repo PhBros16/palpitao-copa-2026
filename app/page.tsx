@@ -58,6 +58,7 @@ const SELECOES_LOGOS: Record<string, string> = {
   'japão': '/logos/japao.png',
   'japan': '/logos/japao.png',
   'coreia do sul': '/logos/coreia-do-sul.png',
+  'coréia do sul': '/logos/coreia-do-sul.png',
   'south korea': '/logos/coreia-do-sul.png',
   'australia': '/logos/australia.png',
   'austrália': '/logos/australia.png',

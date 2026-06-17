@@ -70,6 +70,7 @@ const SELECOES_LOGOS: Record<string, string> = {
   'egito': '/logos/egito.png',
   'egypt': '/logos/egito.png',
   'nigeria': '/logos/nigeria.png',
+  'nigéria': '/logos/nigeria.png',
   'argelia': '/logos/argelia.png',
   'argélia': '/logos/argelia.png',
   'algeria': '/logos/argelia.png',

@@ -191,39 +191,18 @@ function parseMatchDateTime(m: any): Date | null {
   return dt
 }
 
-// Retorna true se o jogo é o primeiro do seu dia na rodada (buffer = 0)
-// Para os demais jogos do mesmo dia, buffer = 30 minutos
-function isFirstMatchOfDay(m: any, allMatches: any[]): boolean {
-  if(!m.date || !m.time) return true // sem data: assume primeiro
-  const [mH, mMin] = m.time.split(':').map(Number)
-  const mMins = mH * 60 + mMin
-  // Verifica se existe outro jogo no mesmo dia com horário anterior
-  return !allMatches.some(other => {
-    if(other === m) return false
-    if(other.date !== m.date) return false
-    if(!other.time) return false
-    const [oH, oMin] = other.time.split(':').map(Number)
-    const oMins = oH * 60 + oMin
-    return oMins < mMins
-  })
-}
-
-function getLockBuffer(m: any, allMatches: any[]): number {
-  return isFirstMatchOfDay(m, allMatches) ? 0 : 30 * 60 * 1000
-}
-
-function isMatchLocked(m: any, matchIndex: number = 1, allMatches?: any[]): boolean {
+function isMatchLocked(m: any, matchIndex: number = 1): boolean {
   if(m.locked) return true
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return false
-  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
+  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
   return (matchTime.getTime() - Date.now()) <= buffer
 }
 
-function getCountdown(m: any, matchIndex: number, allMatches?: any[]): string | null {
+function getCountdown(m: any, matchIndex: number): string | null {
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return null
-  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
+  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
   const diff = matchTime.getTime() - buffer - Date.now()
   if(diff <= 0) return null
   const hours = Math.floor(diff / 3600000)
@@ -234,10 +213,10 @@ function getCountdown(m: any, matchIndex: number, allMatches?: any[]): string | 
   return `${secs}s`
 }
 
-function getCountdownMs(m: any, matchIndex: number, allMatches?: any[]): number {
+function getCountdownMs(m: any, matchIndex: number): number {
   const matchTime = parseMatchDateTime(m)
   if(!matchTime) return Infinity
-  const buffer = allMatches ? getLockBuffer(m, allMatches) : (matchIndex === 0 ? 0 : 30 * 60 * 1000)
+  const buffer = matchIndex === 0 ? 0 : 30 * 60 * 1000
   return matchTime.getTime() - buffer - Date.now()
 }
 
@@ -758,7 +737,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
       desc:'Participou de 5+ rodadas.',
       unlocked: s.rodadas >= 5 },
 
-    { icon:'🎯', tier:1, label:'Olho de Águia',
+    { icon:'🎯', tier:2, label:'Olho de Águia',
       desc:'Acertou 3+ placares exatos na competição.',
       unlocked: s.exatos >= 3 },
 
@@ -804,7 +783,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
         return (pals as any[]).every((p:any)=>p.h===primeiro.h&&p.a===primeiro.a)
       })},
 
-    { icon:'🧮', tier:1, label:'O Contador',
+    { icon:'🧮', tier:2, label:'O Contador',
       desc:'Acertou o saldo de gols em 5+ jogos (sem acertar o placar exato).',
       unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=5 })() },
 
@@ -824,7 +803,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
       desc:'Ficou 3+ rodadas seguidas sem acertar nem um resultado.',
       unlocked: (()=>{ let cur=0,max=0; history.forEach((r:any)=>{ const t=r.tiebreak?.[player]; const acertou=(t?.correct||0)>0; if(!acertou){cur++;if(cur>max)max=cur}else cur=0 }); return max>=3 })() },
 
-    { icon:'🎲', tier:1, label:'Na Sorte',
+    { icon:'🎲', tier:2, label:'Na Sorte',
       desc:'Acertou um placar sem ter palpitado em nenhum outro jogo da rodada.',
       unlocked: history.some((r:any)=>{ const pals=Object.entries(r.palpites?.[player]||{}).filter(([,v]:any)=>v&&v.h!==''); return pals.length===1 && exatosNaRodada(r)===1 }) },
   ]
@@ -847,15 +826,15 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
       desc:'Nunca ficou abaixo da média do grupo em nenhuma rodada (mín. 3).',
       unlocked: (()=>{ if(history.length<3) return false; return history.filter((r:any)=>palpitou(r)).every((r:any)=>{ const pts=r.scores?.[player]??0; const all=Object.values(r.scores||{}) as number[]; if(all.length<2) return true; const media=all.reduce((a:number,b:number)=>a+b,0)/all.length; return pts>=media }) })() },
 
-    { icon:'🧊', tier:2, label:'Sangue Frio',
+    { icon:'🧊', tier:1, label:'Sangue Frio',
       desc:'Acertou placar exato em jogo de mata-mata.',
       unlocked: history.some((r:any)=>{ if(!['oitavas','quartas','semi','final','3lugar','16avos','dezesseis'].includes((r.phase||'').toLowerCase())) return false; return exatosNaRodada(r)>=1 })},
 
-    { icon:'🦜', tier:2, label:'O Papagaio',
+    { icon:'🦜', tier:1, label:'O Papagaio',
       desc:'Apostou igual ao líder em todos os jogos de uma rodada.',
       unlocked: history.some((r:any)=>{ const lider=Object.entries(r.scores||{}).sort((a:any,b:any)=>b[1]-a[1])[0]?.[0]; if(!lider||lider===player) return false; const myP=r.palpites?.[player]||{}; const lP=r.palpites?.[lider]||{}; const ids=Object.keys(myP).filter(id=>myP[id]&&myP[id].h!==''); if(ids.length<2) return false; return ids.every(id=>lP[id]&&myP[id].h===lP[id].h&&myP[id].a===lP[id].a) }) },
 
-    { icon:'🐢', tier:2, label:'Tartaruga',
+    { icon:'🐢', tier:1, label:'Tartaruga',
       desc:'Ficou 2+ rodadas consecutivas em último e conseguiu sair.',
       unlocked: (()=>{
         if(history.length<3) return false
@@ -868,7 +847,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
         return false
       })() },
 
-    { icon:'🤝', tier:2, label:'Diplomata',
+    { icon:'🤝', tier:1, label:'Diplomata',
       desc:'Apostou mais empates que qualquer outro participante (mín. 3 rodadas).',
       unlocked: s.rodadas>=3 && player===maisEmpates },
 
@@ -876,7 +855,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
       desc:'Acertou um placar com 5+ gols no total.',
       unlocked: history.some((r:any)=>Object.keys(r.results||{}).some(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return false; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); return ph===rh&&pa===ra&&(ph+pa)>=5 })) },
 
-    { icon:'💩', tier:2, label:'Lanterninha Raiz',
+    { icon:'💩', tier:1, label:'Lanterninha Raiz',
       desc:'Ficou 3+ rodadas em último lugar.',
       // Corrigido: qualquer um com 3+ vezes em último, sem exigir ser o único
       unlocked: s.rodadasUltimo >= 3 },
@@ -894,11 +873,11 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
         return false
       })() },
 
-    { icon:'🎩', tier:2, label:'O Mágico',
+    { icon:'🎩', tier:3, label:'O Mágico',
       desc:'Acertou 4+ placares exatos em uma única rodada.',
       unlocked: history.some((r:any)=>exatosNaRodada(r)>=4) },
 
-    { icon:'📌', tier:2, label:'Colado na Média',
+    { icon:'📌', tier:1, label:'Colado na Média',
       desc:'Terminou uma rodada com exatamente a mesma pontuação que outro participante.',
       unlocked: history.some((r:any)=>{ const pts=r.scores?.[player]; if(pts===undefined) return false; return Object.entries(r.scores||{}).some(([p,v])=>p!==player&&v===pts) }) },
   ]
@@ -928,7 +907,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
       desc:'Nunca ficou em último em nenhuma rodada (mín. 5 rodadas).',
       unlocked: history.filter((r:any)=>palpitou(r)).length>=5 && nuncaUltimo() },
 
-    { icon:'🧿', tier:3, label:'Saldo Perfeito',
+    { icon:'🧿', tier:2, label:'Saldo Perfeito',
       desc:'Acertou o saldo de gols em 10+ jogos na competição.',
       unlocked: (()=>{ let cnt=0; history.forEach((r:any)=>{ Object.keys(r.results||{}).forEach(id=>{ const pal=r.palpites?.[player]?.[id]; const res=r.results?.[id]; if(!pal||!res||pal.h===''||res.h==='') return; const ph=parseInt(pal.h),pa=parseInt(pal.a),rh=parseInt(res.h),ra=parseInt(res.a); if(!isNaN(ph)&&!isNaN(pa)&&!isNaN(rh)&&!isNaN(ra)&&!(ph===rh&&pa===ra)&&(ph-pa)===(rh-ra)) cnt++ }) }); return cnt>=10 })() },
 
@@ -1030,8 +1009,8 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
   const tierLabels: Record<number,string> = {
     1: '🟢 Qualquer um tem, até você',
     2: '🔵 Rapaz, esse aqui é bom',
-    3: '🌟 Levanta que essa é só sua!',
-    4: '👑 Parabéns, você é campeão do Palpitão Copa 2026',
+    3: '🔥 Rapaz... o cara é bom mesmo',
+    4: '🌟 Levanta que essa é só sua!',
   }
 
   function TrofeuCard({ t, C, tierColors, tierBorders }: { t: any, C: any, tierColors: any, tierBorders: any, key?: any }) {
@@ -1060,9 +1039,9 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isEpic?20:15,
               color: isEpic ? '#FFB6FF' : isExclusive ? C.gold : '#fff',
               letterSpacing:isEpic?3:1}}>{t.label}</span>
-            {isEpic && <span style={{fontSize:9,background:'rgba(255,100,200,.3)',color:'#FFB6FF',border:'1px solid rgba(255,100,200,.5)',borderRadius:4,padding:'1px 6px',letterSpacing:2}}>ÉPICO 👑</span>}
-            {isExclusive && <span style={{fontSize:9,background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
-            {t.tier===2 && <span style={{fontSize:9,background:'rgba(100,180,255,.2)',color:'#7ab0ff',border:'1px solid rgba(100,180,255,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
+            {isEpic && <span style={{fontSize:9,background:'rgba(255,100,200,.3)',color:'#FFB6FF',border:'1px solid rgba(255,100,200,.5)',borderRadius:4,padding:'1px 6px',letterSpacing:1}}>🌟 Levanta que essa é só sua!</span>}
+            {isExclusive && <span style={{fontSize:9,background:'rgba(212,175,55,.2)',color:C.gold,border:'1px solid rgba(212,175,55,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>🔥 Rapaz... o cara é bom mesmo</span>}
+            {t.tier===2 && <span style={{fontSize:9,background:'rgba(100,180,255,.2)',color:'#7ab0ff',border:'1px solid rgba(100,180,255,.3)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>🔵 Rapaz, esse aqui é bom</span>}
           </div>
           <div style={{fontSize:11,color:isEpic?'rgba(255,200,255,.8)':C.textMuted,marginTop:2,lineHeight:1.4}}>{t.desc}</div>
         </div>
@@ -1132,7 +1111,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {tier4Conq.length > 0 && (
               <div style={{marginBottom:16}}>
                 <div style={{fontSize:10,color:'#FFB6FF',letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
-                  <span>👑</span> Parabéns, você é campeão do Palpitão Copa 2026
+                  <span>🌟</span> Levanta que essa é só sua!
                 </div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
                   {tier4Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
@@ -1143,7 +1122,7 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
             {/* Tier 3 */}
             {tier3Conq.length > 0 && (
               <div style={{marginBottom:14}}>
-                <div style={{fontSize:10,color:C.gold,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🌟 Levanta que essa é só sua!</div>
+                <div style={{fontSize:10,color:C.gold,letterSpacing:2,textTransform:'uppercase' as const,marginBottom:8}}>🔥 Rapaz... o cara é bom mesmo</div>
                 <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
                   {tier3Conq.map((t,i)=><TrofeuCard key={i} t={t} C={C} tierColors={tierColors} tierBorders={tierBorders}/>)}
                 </div>
@@ -1184,9 +1163,9 @@ function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu 
                       <div>
                         <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap' as const}}>
                           <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,color:C.textMuted,letterSpacing:1}}>{t.label}</span>
-                          {t.tier===4 && <span style={{fontSize:9,color:'rgba(255,150,255,.4)',border:'1px solid rgba(255,150,255,.2)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>ÉPICO 👑</span>}
-                          {t.tier===3 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>EXCLUSIVO</span>}
-                          {t.tier===2 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>RARO</span>}
+                          {t.tier===4 && <span style={{fontSize:9,color:'rgba(255,150,255,.4)',border:'1px solid rgba(255,150,255,.2)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>🌟 Levanta que essa é só sua!</span>}
+                          {t.tier===3 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>🔥 Rapaz... o cara é bom mesmo</span>}
+                          {t.tier===2 && <span style={{fontSize:9,color:C.textMuted,border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'1px 5px',letterSpacing:1}}>🔵 Rapaz, esse aqui é bom</span>}
                         </div>
                         <div style={{fontSize:11,color:C.textSub,marginTop:1}}>{t.desc}</div>
                       </div>
@@ -1908,7 +1887,7 @@ export default function Home() {
     const newState = JSON.parse(JSON.stringify(state))
     if(!newState.palpites[currentUser]) newState.palpites[currentUser]={}
     state.round.matches.forEach((m:any, idx:number)=>{
-      if(isMatchLocked(m,idx,state.round.matches)) return
+      if(isMatchLocked(m,idx)) return
       const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
       newState.palpites[currentUser][m.id]=pal
     })
@@ -2902,7 +2881,7 @@ export default function Home() {
             {/* Banner palpite pendente */}
             {!isAdmin && state.palpitesOpen && state.round.matches.length>0 && !state.roundFinalized && (()=>{
               const myPal=state.palpites[currentUser!]||{}
-              const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx,state.round.matches)&&(!myPal[m.id]||myPal[m.id].h===''))
+              const pendentes=state.round.matches.filter((m:any,idx:number)=>!isMatchLocked(m,idx)&&(!myPal[m.id]||myPal[m.id].h===''))
               return pendentes.length>0?(
                 <div className="pending-banner" onClick={()=>setActiveTab('palpites')}>
                   <span style={{fontSize:20}}>⚠️</span>
@@ -2921,14 +2900,14 @@ export default function Home() {
               const myTotal = !isAdmin ? (state.totalPoints[currentUser!]||0) : 0
               const myRoundPts = !isAdmin ? (Object.values(state.correctedScores[currentUser!]||{}).reduce((a:number,b:unknown)=>a+(b as number),0) as number) : 0
               const ptsParaSubir = myPos > 0 ? (sorted[myPos-1]?.total||0) - myTotal : 0
-              const jogosRestantes = state.round.matches.filter((m:any, idx:number) => !isMatchLocked(m, idx, state.round.matches)).length
+              const jogosRestantes = state.round.matches.filter((_:any, idx:number) => !isMatchLocked(state.round.matches[idx], idx)).length
               const proximoJogo = state.round.matches.reduce((closest:any, m:any, idx:number)=>{
-                const diff = getCountdownMs(m, idx, state.round.matches)
-                if(diff > 0 && (closest === null || diff < getCountdownMs(closest.m, closest.idx, state.round.matches)))
+                const diff = getCountdownMs(m, idx)
+                if(diff > 0 && (closest === null || diff < getCountdownMs(closest.m, closest.idx)))
                   return {m, idx}
                 return closest
               }, null)
-              const proximoCountdown = proximoJogo ? getCountdown(proximoJogo.m, proximoJogo.idx, state.round.matches) : null
+              const proximoCountdown = proximoJogo ? getCountdown(proximoJogo.m, proximoJogo.idx) : null
 
               return (
                 <div style={{background:dm?'linear-gradient(135deg,rgba(0,50,25,.7),rgba(0,30,60,.5))':'rgba(255,255,255,.9)',border:`1px solid ${C.border}`,borderRadius:12,padding:'18px 16px',marginBottom:20,boxShadow:C.shadow}}>
@@ -3154,7 +3133,7 @@ export default function Home() {
             {(()=>{
               if(!currentUser||isAdmin) return null
               const travadosSemPalpite = state.round.matches.filter((m:any,idx:number)=>{
-                const locked = isMatchLocked(m,idx,state.round.matches)
+                const locked = isMatchLocked(m,idx)
                 const pal = state.palpites[currentUser!]?.[m.id]
                 return locked && (!pal || pal.h === '')
               })
@@ -3187,8 +3166,8 @@ export default function Home() {
 
             {[...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any,idx:number)=>{
               const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
-              const locked=!state.palpitesOpen||isMatchLocked(m,idx,state.round.matches)
-              const diffMs = getCountdownMs(m, idx, state.round.matches)
+              const locked=!state.palpitesOpen||isMatchLocked(m,idx)
+              const diffMs = getCountdownMs(m, idx)
               const phase = getCurrentPhase(state)
               const scoreMult = state.multipliers||defaultMultipliers()
               const simPts = calcSimulatedPoints(pal, phase, mult, m, scoreMult)
@@ -3260,7 +3239,7 @@ export default function Home() {
                         <span>⏱ {m.date?`${m.date} · `:''}{m.time||'—'}</span>
                         {/* Timer visual urgente quando menos de 1h */}
                         {diffMs > 0 && diffMs < 3600000 && <CountdownTimer diffMs={diffMs} C={C}/>}
-                        {diffMs >= 3600000 && <span style={{color:C.goldLight,fontSize:12}}>· fecha em {getCountdown(m,idx,state.round.matches)}</span>}
+                        {diffMs >= 3600000 && <span style={{color:C.goldLight,fontSize:12}}>· fecha em {getCountdown(m,idx)}</span>}
                       </span>
                   }
                 </div>
@@ -4025,7 +4004,7 @@ export default function Home() {
                         const res=state.results[m.id]
                         const pts=state.correctedScores[p]?.[m.id]
                         const key=`${p}-${m.id}`
-                        const locked = isMatchLocked(m, state.round.matches.indexOf(m), state.round.matches)
+                        const locked = isMatchLocked(m, state.round.matches.indexOf(m))
                         return (
                           <div key={m.id} style={{padding:'10px 0',borderBottom:`1px solid ${C.borderFaint}`}}>
                             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:6,marginBottom:6}}>

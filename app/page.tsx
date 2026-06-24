@@ -308,13 +308,13 @@ function GuiaStep({ n, text }: {n:number, text:string}) {
 function PodiumDisplay({ players, scores }: { players: string[], scores: Record<string,number> }) {
   const sorted = [...players].sort((a,b)=>(scores[b]||0)-(scores[a]||0)).slice(0,3)
   const order = [sorted[1], sorted[0], sorted[2]] // prata, ouro, bronze
-  const heights = [110, 150, 80]
+  const heights = [68, 96, 48]
   const medals = ['🥈','👑','🥉']
   const colors = ['#9E9E9E','#D4AF37','#CD7F32']
-  const avatarSizes = [44, 54, 40]
+  const avatarSizes = [38, 48, 34]
 
   return (
-    <div style={{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:10,padding:'48px 8px 0',minHeight:260,overflow:'visible'}}>
+    <div style={{display:'flex',alignItems:'flex-end',justifyContent:'center',gap:10,padding:'16px 8px 0',minHeight:200,overflow:'visible'}}>
       {order.map((name,i)=>{
         if(!name) return null
         const pts = scores[name]||0
@@ -322,7 +322,7 @@ function PodiumDisplay({ players, scores }: { players: string[], scores: Record<
         const isFirst = i===1
         return (
           <div key={name} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5,animation:`podiumRise 0.6s ease ${i*0.15}s both`,flex:isFirst?'0 0 90px':'0 0 76px'}}>
-            <span style={{fontSize:isFirst?28:20,lineHeight:1}}>{medals[i]}</span>
+            <span style={{fontSize:isFirst?24:18,lineHeight:1}}>{medals[i]}</span>
             <div style={{
               width:avatarSizes[i],height:avatarSizes[i],borderRadius:'50%',
               background:`linear-gradient(135deg,${colors[i]},${colors[i]}88)`,
@@ -344,7 +344,7 @@ function PodiumDisplay({ players, scores }: { players: string[], scores: Record<
 }
 
 // ── Gráfico de evolução ─────────────────────────────────────────────────────
-function EvolucaoChart({ history, players, C, windowSize=0 }: any) {
+function EvolucaoChart({ history, players, C, windowSize=0, mode='top3', currentUser=null }: any) {
   if(!history||history.length===0) return <div style={{color:C.textMuted,fontSize:13,padding:'20px 0',textAlign:'center'}}>Nenhuma rodada finalizada ainda.</div>
 
   // Aplica janela de exibição
@@ -381,8 +381,14 @@ function EvolucaoChart({ history, players, C, windowSize=0 }: any) {
   const getX = (i:number) => padL + (i / Math.max(history.length-1,1)) * chartW
   const getY = (val:number) => padT + chartH - (val / maxVal) * chartH
 
-  // Top 5 para não poluir
-  const top5 = [...players].sort((a,b)=>(running[b]||0)-(running[a]||0)).slice(0,5)
+  // Filtra jogadores exibidos baseado no mode + garante que o usuário atual aparece
+  const sortedAll = [...players].sort((a,b)=>(running[b]||0)-(running[a]||0))
+  const topN = mode==='all' ? players.length : mode==='top5' ? 5 : 3
+  const topPlayers = sortedAll.slice(0, topN)
+  // Garante que o usuário atual apareça mesmo fora do top
+  const top5 = (currentUser && !topPlayers.includes(currentUser) && players.includes(currentUser))
+    ? [...topPlayers, currentUser]
+    : topPlayers
 
   return (
     <div style={{overflowX:'auto'}}>
@@ -963,31 +969,7 @@ function calcTrofeus(player: string, history: any[], allPlayers: string[]) {
   return [...tier1, ...tier2, ...tier3, ...tier4]
 }
 
-function calcSequencia(player: string, history: any[], allPlayers: string[]): string | null {
-  if(history.length < 2) return null
-  const positions = history.map((r:any) => {
-    const sorted = [...allPlayers].sort((a,b)=>(r.scores?.[b]||0)-(r.scores?.[a]||0))
-    return sorted.indexOf(player) + 1
-  })
-  const last = positions[positions.length-1]
-  const prev = positions[positions.length-2]
-  let topStreak=0; for(let i=positions.length-1;i>=0;i--){ if(positions[i]<=3) topStreak++; else break }
-  let firstStreak=0; for(let i=positions.length-1;i>=0;i--){ if(positions[i]===1) firstStreak++; else break }
-  let fallStreak=0; for(let i=positions.length-1;i>=1;i--){ if(positions[i]>positions[i-1]) fallStreak++; else break }
-  // Hash único por jogador — combina chars do nome + posição atual + tamanho do histórico
-  const hashPlayer = player.split('').reduce((acc,c,i)=>acc+(c.charCodeAt(0)*(i+1)),0)
-  const pick = (arr:string[]) => arr[Math.floor(Math.abs(Math.sin(hashPlayer+last+history.length*7))*arr.length)]
-  const FTOP1=['invicto no topo 🔥','dominando sem dó 💪','sem concorrência 👑','é o rei da rodada 🏆','tá na beira do abismo 👑']
-  const FTOP3=['grudado no top 3 🔥','não sai do pódio 🏅','vício em top 3 😤','dando trabalho pro líder 👀','colado no pódio 🤝']
-  const FQUEDA=['em queda livre 📉','escorregando na tabela 😬','descendo mais rápido do que apostou 💀','saindo do top 📣','alguém chama ele 🤦']
-  const FSUBIDA=['recuperando o fôlego 📈','voltando com força 💪','subindo na tabela 🚀','parece que acordou 👀','resolveu jogar sério 😏']
-  if(firstStreak>=2) return `${firstStreak} rodadas liderando — ${pick(FTOP1)}`
-  if(topStreak>=3) return `${topStreak} rodadas no top 3 — ${pick(FTOP3)}`
-  if(fallStreak>=2&&last>8) return `${fallStreak} rodadas caindo — ${pick(FQUEDA)}`
-  if(prev>5&&last<=3) return `subiu ${prev-last} posições — ${pick(FSUBIDA)}`
-  if(last===allPlayers.length) return pick(['lanterna... alguém acorda esse cara 😴','digno do troféu de último 💩','nem palpitou direito 🤡'])
-  return null
-}
+
 
 function EstatisticasPessoais({ player, history, allPlayers, C, dm, onNewTrofeu }: any) {
   const [showTrofeus, setShowTrofeus] = useState(false)
@@ -1592,6 +1574,7 @@ export default function Home() {
   const [compareHistWindow, setCompareHistWindow] = useState<number>(0)
   const [projWindow, setProjWindow] = useState<number>(3) // janela de projeção em rodadas
   const [evolucaoWindow, setEvolucaoWindow] = useState<number>(0) // janela do gráfico de evolução (0 = desde o início)
+  const [evolucaoMode, setEvolucaoMode] = useState<'top3'|'top5'|'all'>('top3') // quem aparece no gráfico
   const [chatMsg, setChatMsg] = useState('')
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatLoading, setChatLoading] = useState(false)
@@ -3369,7 +3352,6 @@ export default function Home() {
                               {state.playerAvatars?.[d.name]&&<span style={{fontSize:16}}>{state.playerAvatars[d.name]}</span>}
                               <span>{d.name}{tied&&<span style={{fontSize:10,color:C.gold,marginLeft:4}}>≈</span>}</span>
                             </div>
-                            {(()=>{ const sq=calcSequencia(d.name,state.roundHistory,PLAYERS); return sq?<div style={{fontSize:9,color:C.textMuted,marginTop:1,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:140}}>{sq}</div>:null })()}
                           </td>
                           <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold}}>{d.total}</td>
                           <td className="r" style={{color:C.textMuted}}>{d.exact}</td>
@@ -3471,7 +3453,27 @@ export default function Home() {
                   </button>
                   {showEvolucao && (
                     <div className="card" style={{animation:'fadeSlideIn .2s ease both'}}>
-                      <EvolucaoChart history={state.roundHistory} players={PLAYERS} C={C} windowSize={evolucaoWindow}/>
+                      {/* Seletor de modo */}
+                      <div style={{display:'flex',gap:6,marginBottom:12,flexWrap:'wrap' as const}}>
+                        {([
+                          {v:'top3', l:'Top 3 + eu'},
+                          {v:'top5', l:'Top 5 + eu'},
+                          {v:'all',  l:'Todos'},
+                        ] as const).map(({v,l})=>(
+                          <button key={v} onClick={()=>setEvolucaoMode(v)}
+                            style={{
+                              fontFamily:"'Barlow Condensed',sans-serif",fontSize:12,fontWeight:600,
+                              letterSpacing:1,padding:'5px 12px',borderRadius:6,cursor:'pointer',
+                              border:`1px solid ${evolucaoMode===v?C.gold:C.borderFaint}`,
+                              background:evolucaoMode===v?'rgba(212,175,55,.15)':'transparent',
+                              color:evolucaoMode===v?C.gold:C.textMuted,
+                              transition:'all .15s',
+                            }}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      <EvolucaoChart history={state.roundHistory} players={PLAYERS} C={C} windowSize={evolucaoWindow} mode={evolucaoMode} currentUser={isAdmin?null:currentUser}/>
                     </div>
                   )}
                 </div>

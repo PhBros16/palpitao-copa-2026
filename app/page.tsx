@@ -86,6 +86,7 @@ const SELECOES_LOGOS: Record<string, string> = {
   'arabia saudita': '/logos/arabia-saudita.png',
   'arábia saudita': '/logos/arabia-saudita.png',
   'saudi arabia': '/logos/arabia-saudita.png',
+  'irã': '/logos/ira.png',
   'ira': '/logos/ira.png',
   'iran': '/logos/ira.png',
   'iraque': '/logos/iraque.png',

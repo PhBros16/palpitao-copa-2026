@@ -86,7 +86,6 @@ const SELECOES_LOGOS: Record<string, string> = {
   'arabia saudita': '/logos/arabia-saudita.png',
   'arábia saudita': '/logos/arabia-saudita.png',
   'saudi arabia': '/logos/arabia-saudita.png',
-  'irã': '/logos/ira.png',
   'ira': '/logos/ira.png',
   'iran': '/logos/ira.png',
   'iraque': '/logos/iraque.png',
@@ -975,7 +974,9 @@ function calcSequencia(player: string, history: any[], allPlayers: string[]): st
   let topStreak=0; for(let i=positions.length-1;i>=0;i--){ if(positions[i]<=3) topStreak++; else break }
   let firstStreak=0; for(let i=positions.length-1;i>=0;i--){ if(positions[i]===1) firstStreak++; else break }
   let fallStreak=0; for(let i=positions.length-1;i>=1;i--){ if(positions[i]>positions[i-1]) fallStreak++; else break }
-  const pick = (arr:string[]) => arr[Math.floor(Math.abs(Math.sin(player.length*history.length))*arr.length)]
+  // Hash único por jogador — combina chars do nome + posição atual + tamanho do histórico
+  const hashPlayer = player.split('').reduce((acc,c,i)=>acc+(c.charCodeAt(0)*(i+1)),0)
+  const pick = (arr:string[]) => arr[Math.floor(Math.abs(Math.sin(hashPlayer+last+history.length*7))*arr.length)]
   const FTOP1=['invicto no topo 🔥','dominando sem dó 💪','sem concorrência 👑','é o rei da rodada 🏆','tá na beira do abismo 👑']
   const FTOP3=['grudado no top 3 🔥','não sai do pódio 🏅','vício em top 3 😤','dando trabalho pro líder 👀','colado no pódio 🤝']
   const FQUEDA=['em queda livre 📉','escorregando na tabela 😬','descendo mais rápido do que apostou 💀','saindo do top 📣','alguém chama ele 🤦']
@@ -3368,7 +3369,7 @@ export default function Home() {
                               {state.playerAvatars?.[d.name]&&<span style={{fontSize:16}}>{state.playerAvatars[d.name]}</span>}
                               <span>{d.name}{tied&&<span style={{fontSize:10,color:C.gold,marginLeft:4}}>≈</span>}</span>
                             </div>
-                            {(()=>{ const sq=calcSequencia(d.name,state.roundHistory,PLAYERS); return sq?<div style={{fontSize:10,color:C.textMuted,marginTop:1,lineHeight:1.3}}>{sq}</div>:null })()}
+                            {(()=>{ const sq=calcSequencia(d.name,state.roundHistory,PLAYERS); return sq?<div style={{fontSize:9,color:C.textMuted,marginTop:1,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:140}}>{sq}</div>:null })()}
                           </td>
                           <td className="r" style={{fontFamily:"'Bebas Neue'",fontSize:18,color:C.gold}}>{d.total}</td>
                           <td className="r" style={{color:C.textMuted}}>{d.exact}</td>

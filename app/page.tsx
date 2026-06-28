@@ -2596,7 +2596,10 @@ export default function Home() {
 
       {/* Modal Resultados da Rodada */}
       {showResultados && (()=>{
-        const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+        const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            })
         return (
           <div className="modal-overlay open" onClick={()=>setShowResultados(false)}>
             <div className="modal" style={{maxWidth:460,width:'95%',maxHeight:'85vh',overflow:'hidden',display:'flex',flexDirection:'column'}} onClick={e=>e.stopPropagation()}>
@@ -3124,7 +3127,10 @@ export default function Home() {
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap' as const,gap:8,marginBottom:4}}>
               <div className="section-title" style={{marginBottom:0}}>Meus Palpites</div>
               {(()=>{
-                const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+                const sortedForResult = [...state.round.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            })
                 const temResultado = sortedForResult.some((m:any)=>state.results[m.id]?.h!==undefined&&state.results[m.id]?.h!=='')
                 if(!temResultado) return null
                 return (
@@ -3172,7 +3178,10 @@ export default function Home() {
 
             {state.round.matches.length===0&&<div style={{color:C.textMuted,fontSize:13,padding:'20px 0'}}>Nenhum jogo configurado. Aguarde a administração.</div>}
 
-            {[...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any,idx:number)=>{
+            {[...state.round.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            }).map((m:any,idx:number)=>{
               const pal=localPalpites[m.id]||{h:'',a:'',quemAvanca:'',penaltis:''}
               const locked=!state.palpitesOpen||isMatchLocked(m,idx,state.round.matches)
               const diffMs = getCountdownMs(m, idx, state.round.matches)
@@ -3270,7 +3279,10 @@ export default function Home() {
             <div className="section-title">Tabela da Rodada</div>
             <div className="section-sub">Palpites da rodada atual</div>
             {(()=>{
-              const sortedMatches = [...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99')))
+              const sortedMatches = [...state.round.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            })
               return (
             <div className="table-wrap">
               <table className="dt">
@@ -3522,7 +3534,10 @@ export default function Home() {
                   <div style={{marginBottom:10,padding:'8px 10px',background:dm?'rgba(0,20,10,.4)':'rgba(0,60,30,.04)',borderRadius:6,border:`1px solid ${C.borderFaint}`}}>
                     <div style={{fontSize:10,color:C.textMuted,letterSpacing:1,textTransform:'uppercase' as const,marginBottom:6}}>Jogos desta rodada</div>
                     <div style={{display:'flex',flexDirection:'column' as const,gap:4}}>
-                      {[...r.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any)=>{
+                      {[...r.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            }).map((m:any)=>{
                         const res = r.results?.[m.id]
                         return (
                           <div key={m.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:12}}>
@@ -3653,7 +3668,10 @@ export default function Home() {
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:14,fontWeight:600,color:'#3498db'}}>{compareTarget}</div>
                 </div>
                 <div style={{overflowY:'auto',flex:1}}>
-                {[...state.round.matches].sort((a:any,b:any)=>((a.date||'99/99')+(a.time||'99:99')).localeCompare((b.date||'99/99')+(b.time||'99:99'))).map((m:any)=>{
+                {[...state.round.matches].sort((a:any,b:any)=>{
+              const toKey=(d:string,t:string)=>{ const [dd,mm]=(d||'99/99').split('/'); return `${mm||'99'}/${dd||'99'}`+(t||'99:99') }
+              return toKey(a.date,a.time).localeCompare(toKey(b.date,b.time))
+            }).map((m:any)=>{
                   const myPal=state.palpites[currentUser!]?.[m.id]; const hisPal=state.palpites[compareTarget]?.[m.id]
                   const res=state.results[m.id]; const hasRes=res&&res.h!==''&&res.a!==''
                   function palResult(pal:any) {

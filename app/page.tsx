@@ -2635,7 +2635,7 @@ export default function Home() {
                         </div>
                       )}
                       {pts!==undefined&&(
-                        <span className={`pts-badge pts-${Math.min(pts,5)}`} style={{fontSize:14,padding:'4px 10px'}}>{pts}pt</span>
+                        <span className={`pts-badge pts-${pts===0?0:pts>=5?5:pts>=3?3:1}`} style={{fontSize:14,padding:'4px 10px'}}>{pts}pt</span>
                       )}
                     </div>
                   )
@@ -3307,7 +3307,7 @@ export default function Home() {
                         const pts=state.correctedScores[p]?.[m.id]??null
                         return <td key={m.id} className="c">
                           <span style={{fontFamily:"'Bebas Neue'",fontSize:15}}>{myPal.h}×{myPal.a}</span>
-                          {pts!==null&&<><br/><span className={`pts-badge pts-${Math.min(pts,5)}`}>{pts}</span></>}
+                          {pts!==null&&<><br/><span className={`pts-badge pts-${pts===0?0:pts>=5?5:pts>=3?3:1}`}>{pts}</span></>}
                         </td>
                       })}
                       <td className="r" style={{color:C.gold,fontFamily:"'Bebas Neue'",fontSize:17}}>{(roundPts as number)>0?(roundPts as number):'—'}</td>
@@ -4072,7 +4072,7 @@ export default function Home() {
                                   {res&&res.h!==''?`${res.h}×${res.a}`:'—'}
                                 </b>
                               </div>
-                              {pts!==undefined && <span className={`pts-badge pts-${Math.min(pts,5)}`}>{pts}pt</span>}
+                              {pts!==undefined && <span className={`pts-badge pts-${pts===0?0:pts>=5?5:pts>=3?3:1}`}>{pts}pt</span>}
                             </div>
                             <div style={{display:'flex',gap:6,alignItems:'center',marginTop:8}}>
                               <span style={{fontSize:11,color:C.textMuted}}>Corrigir pts:</span>

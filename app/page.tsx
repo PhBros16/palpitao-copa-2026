@@ -256,14 +256,17 @@ function calcPoints(pal: any, res: any, phase: any, mult: number, m: any, extraR
     const pw=ph>pa?1:ph<pa?-1:0, rw=rh>ra?1:rh<ra?-1:0
     if(pw===rw) base = rules[0]?.pts??1
   }
-  let total = base * mult
+  // Soma todos os bônus ANTES de multiplicar
+  let bonusQuemAvanca = 0
   if(m?.hasQuemAvanca && extraRes?.quemAvanca && pal?.quemAvanca) {
-    if(pal.quemAvanca === extraRes.quemAvanca) total += (scoreMult?.quemAvanca??2) * mult
+    if(pal.quemAvanca === extraRes.quemAvanca) bonusQuemAvanca = scoreMult?.quemAvanca??2
   }
+  let bonusPenaltis = 0
   if(m?.hasPenaltis && extraRes?.foiPenaltis === true && ph===pa) {
-    total += (scoreMult?.penaltisBonus??1)
+    bonusPenaltis = scoreMult?.penaltisBonus??1
   }
-  return total
+  // Total = (placar + quem avança + pênaltis) × multiplicador da fase
+  return (base + bonusQuemAvanca + bonusPenaltis) * mult
 }
 
 // Calcula pontos simulados (se o resultado fosse o palpite)

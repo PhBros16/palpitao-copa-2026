@@ -3393,12 +3393,14 @@ export default function Home() {
 
             {/* Tabela rodada a rodada */}
             {state.roundHistory.length > 0 && (()=>{
-              const SCORE_COLORS = (pts:number, max:number) => {
+              const SCORE_COLORS = (pts:number, _max:number) => {
                 if(pts===0) return {bg:'rgba(192,57,43,.15)',color:'#e74c3c'}
-                const r = pts/max
-                if(r>=0.8) return {bg:'rgba(0,166,81,.25)',color:'#00c060'}
-                if(r>=0.5) return {bg:'rgba(212,175,55,.2)',color:'#D4AF37'}
-                return {bg:'rgba(52,152,219,.15)',color:'#3498db'}
+                // Usa limiares absolutos baseados nos pontos-base (1/3/5),
+                // ignorando o multiplicador de fase para não quebrar a coloração
+                // quando pts multiplicados fogem dos thresholds relativos.
+                if(pts>=5) return {bg:'rgba(0,166,81,.25)',color:'#00c060'}   // cravada (ou melhor com mult)
+                if(pts>=3) return {bg:'rgba(212,175,55,.2)',color:'#D4AF37'}  // saldo
+                return {bg:'rgba(52,152,219,.2)',color:'#5dade2'}              // vencedor (azul mais vivo)
               }
               return (
                 <div style={{marginBottom:20}}>
@@ -3784,7 +3786,7 @@ export default function Home() {
             <div className="a-warn">⚠ Área restrita — alterações afetam todos os participantes.</div>
 
             {/* Compartilhar no WhatsApp */}
-            <AdminSection title="📲 Compartilhar no WhatsApp" defaultOpen={true}>
+            <AdminSection title="📲 Compartilhar no WhatsApp" defaultOpen={false}>
               <div className="a-card">
                 <div style={{fontSize:12,color:C.textMuted,marginBottom:14,lineHeight:1.5}}>
                   Envie um resumo direto no WhatsApp. Escolha o que compartilhar:
@@ -3867,7 +3869,7 @@ export default function Home() {
             </AdminSection>
 
             {/* Configuração da Rodada */}
-            <AdminSection title="⚙ Configuração da Rodada" defaultOpen={true}>
+            <AdminSection title="⚙ Configuração da Rodada" defaultOpen={false}>
               <div className="a-card">
                 <div className="a-row">
                   <span className="a-lbl">Nome:</span>
@@ -3976,7 +3978,7 @@ export default function Home() {
             </AdminSection>
 
             {/* Resultado & Correção */}
-            <AdminSection title="⚽ Resultado & Correção" defaultOpen={true}>
+            <AdminSection title="⚽ Resultado & Correção" defaultOpen={false}>
               <div className="a-card">
                 {state.round.matches.map((m:any)=>(
                   <div key={m.id} style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.borderFaint}`}}>
